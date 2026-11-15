@@ -82,22 +82,28 @@ Decida com base nos números recebidos, como alguém com interesses reais decidi
 
 // ---------- Arena ----------
 const TOKENS_ARENA = +process.env.ARENA_TOKENS || TOKENS_TOTAL;
-const ARQUIVO_GASTO = path.join(aqui, '..', '.arena-gasto.json');
+const NA_VERCEL = !!process.env.VERCEL;
+const ARQUIVO_GASTO = NA_VERCEL ? '/tmp/arena-gasto.json' : path.join(aqui, '..', '.arena-gasto.json');
 // O gasto de cada API é contado aqui, por jogo, e fica em disco: reiniciar o
 // servidor não zera a conta de uma partida em andamento.
 let livro = { jogo: null, gasto: {} };
 try { livro = JSON.parse(fs.readFileSync(ARQUIVO_GASTO, 'utf8')); } catch { /* primeira execução */ }
+
+// Com ARENA_SENHA definida, só quem tem o código consegue gastar as chaves das IAs.
+const SENHA = process.env.ARENA_SENHA || '';
+const autorizado = (req) => !SENHA || req.headers?.['x-senha'] === SENHA;
 
 async function rotaArena(req, res) {
   const ceo = req.url === '/api/arena/decidir-ceo';
   if (req.url === '/api/arena/status') {
     return responder(res, 200, {
       // Chave do Google Maps para o navegador (restrinja-a ao seu domínio no console do Google).
-      googleMaps: process.env.GOOGLE_MAPS_API_KEY || '',
+      googleMaps: process.env.GOOGLE_MAPS_API_KEY || '', pedeSenha: !!SENHA, senhaOk: autorizado(req),
       tokens: TOKENS_ARENA, jogo: livro.jogo, ensaio: process.env.ARENA_ENSAIO === '1',
       provedores: Object.fromEntries(Object.entries(PROVEDORES).map(([id, p]) => [id, { ativo: ativo(id), modelo: p.modelo, precos: p.precos, gasto: livro.gasto[id] || 0 }])),
     });
   }
+  if (!autorizado(req)) return responder(res, 401, { erro: 'código de acesso inválido' });
   const corpo = await lerCorpo(req);
   const id = corpo.provedor;
   if (!PROVEDORES[id]) return responder(res, 400, { erro: 'provedor desconhecido' });
@@ -140,6 +146,8 @@ async function pedir(sistema, usuario, esquema) {
 }
 
 function lerCorpo(req) {
+  // Na Vercel o corpo já chega lido e interpretado.
+  if (NA_VERCEL && req.body !== undefined) return Promise.resolve(typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {});
   return new Promise((ok, erro) => {
     let dados = '';
     req.on('data', (c) => { dados += c; if (dados.length > 65536) { erro(new Error('corpo grande demais')); req.destroy(); } });
@@ -155,7 +163,7 @@ const responder = (res, status, corpo) => {
 
 const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
-const servidor = http.createServer(async (req, res) => {
+export async function tratar(req, res) {
   try {
     if (req.url.startsWith('/api/arena/')) {
       try { return await rotaArena(req, res); } catch (e) { console.error('[arena]', e.message); return responder(res, 502, { erro: e.message }); }
@@ -163,6 +171,7 @@ const servidor = http.createServer(async (req, res) => {
     if (req.url === '/api/status') return responder(res, 200, { ia: !!client && conta.gasto < LIMITE, ...custo() });
     if (req.method === 'POST' && (req.url === '/api/evento' || req.url === '/api/conselho')) {
       if (!client) return responder(res, 503, { erro: 'IA não configurada' });
+      if (!autorizado(req)) return responder(res, 401, { erro: 'código de acesso inválido' });
       const corpo = await lerCorpo(req);
       if (req.url === '/api/evento') {
         const texto = String(corpo.texto || '').slice(0, 1200);
@@ -194,8 +203,9 @@ const servidor = http.createServer(async (req, res) => {
     console.error('[servidor]', e.message);
     responder(res, status, { erro: e.message, custo: custo() });
   }
-});
+}
 
-servidor.listen(PORTA, () => {
+// Na Vercel quem recebe os pedidos é api/index.mjs; em um computador, este servidor.
+if (!NA_VERCEL) http.createServer(tratar).listen(PORTA, () => {
   console.log(`Cidade Viva: servidor em http://localhost:${PORTA} — IA ${client ? `ativa (${MODELO}, teto de US$ ${LIMITE.toFixed(2)})` : 'desligada (defina ANTHROPIC_API_KEY para ligar)'}`);
 });

@@ -312,7 +312,7 @@ function novidades() {
 
 // ---------- o mês: os três despacham ao mesmo tempo, depois o mês fecha ----------
 async function pedir(c) {
-  const r = await fetch('/api/arena/decidir-ceo', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jogo: j.jogo, provedor: c.id, situacao: dossie(j, c) }) });
+  const r = await fetch('/api/arena/decidir-ceo', { method: 'POST', headers: { 'content-type': 'application/json', 'x-senha': senha() }, body: JSON.stringify({ jogo: j.jogo, provedor: c.id, situacao: dossie(j, c) }) });
   const dados = await r.json();
   if (!r.ok) throw new Error(dados.erro || `erro ${r.status}`);
   return dados;
@@ -371,7 +371,19 @@ window.jogoCEO = {
 fim = terminou(j);
 pintar();
 pintarAba();
-fetch('/api/arena/status').then((r) => r.json()).catch(() => servidor).then(async (s) => {
+// Código de acesso: protege as chaves das IAs quando o jogo está publicado.
+function senha() { try { return localStorage.getItem('cidade-viva-senha') || ''; } catch { return ''; } }
+async function lerStatus() {
+  let s = await fetch('/api/arena/status', { headers: { 'x-senha': senha() } }).then((r) => r.json()).catch(() => servidor);
+  if (s.pedeSenha && !s.senhaOk) {
+    const dig = prompt('Código de acesso para jogar com as IAs (deixe vazio para só assistir aos jogadores por regras):');
+    if (dig) { try { localStorage.setItem('cidade-viva-senha', dig.trim()); } catch { /* sem armazenamento */ } s = await fetch('/api/arena/status', { headers: { 'x-senha': senha() } }).then((r) => r.json()).catch(() => servidor); }
+    // Sem o código certo, ninguém chama as IAs: os três jogam por regras.
+    if (!s.senhaOk) { for (const p of Object.values(s.provedores || {})) p.ativo = false; if (dig) alert('Código incorreto. Os três vão jogar por regras.'); }
+  }
+  return s;
+}
+lerStatus().then(async (s) => {
   servidor = s;
   mapa = await criarMapa($('mapa'), s.googleMaps, verCEO);
   $('fonte').textContent = `mapa: ${mapa.tipo}`;
