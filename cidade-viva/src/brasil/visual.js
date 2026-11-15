@@ -40,3 +40,40 @@ export function cidadeVisual(m) {
   }
   return { specs, mundo: { familias, negocios: [] } };
 }
+
+// A cidade com as marcas dos CEOs: cada rede ocupa lotes com a própria cor.
+// A quantidade de prédios cresce com o número de unidades (em escala logarítmica),
+// e quem passa de R$ 20 milhões ganha uma sede.
+const PUBLICOS = new Set([2, 5, 9, 14, 40, 46, 20, 12, 26, 58, 34, 30]);
+const INDUSTRIA = new Set(['fabrica', 'distribuidora', 'marca_nacional']);
+export function cidadeDosCEOs(j, cores) {
+  const v = cidadeVisual(j.cidade);
+  const porChave = new Map(v.specs.map((s) => [s.chave, s]));
+  j.ceos.forEach((c, k) => {
+    if (c.quebrou) return;
+    const cor = cores[c.id];
+    const lojas = [], galpoes = [];
+    for (const op of Object.values(c.ops)) {
+      const u = op.unidades + op.fora;
+      if (!u) continue;
+      const n = u <= 5 ? u : Math.min(14, 5 + Math.round(3 * Math.log10(u)));
+      for (let i = 0; i < n; i++) (INDUSTRIA.has(op.tipo) ? galpoes : lojas).push(op.tipo);
+    }
+    let iL = 0, iG = 0;
+    const total = v.specs.length;
+    for (let idx = 3 + k; idx < total && (iL < lojas.length || iG < galpoes.length); idx += 3) {
+      if (PUBLICOS.has(idx)) continue;
+      const s = porChave.get(`b${idx}`);
+      const borda = idx / total > 0.6;
+      if (borda && iG < galpoes.length) { Object.assign(s, { tipo: 'galpao', classe: 'br', nivel: 1, cor, dono: c.id }); iG++; }
+      else if (!borda && iL < lojas.length) { Object.assign(s, { tipo: 'comercio', classe: 'br', nivel: 1, cor, dono: c.id }); iL++; }
+    }
+    if (c.patrimonio > 20e6) {
+      const s = porChave.get(`b${[6, 7, 8][k]}`);
+      Object.assign(s, { tipo: 'predio', classe: 'br', nivel: Math.round(lim(3 * Math.log10(c.patrimonio / 1e6), 4, 15)), cor, dono: c.id });
+    }
+  });
+  // A cor entra na assinatura: um lote que troca de dono é reconstruído.
+  for (const s of v.specs) if (s.cor !== undefined) s.nivel = s.nivel * 100 + (s.cor % 97);
+  return v;
+}

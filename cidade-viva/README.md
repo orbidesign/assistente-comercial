@@ -7,6 +7,110 @@ Um vale vazio, cinco famílias e uma fogueira. A cidade cresce sozinha, e você 
 Protótipo de testes. Vive numa pasta isolada deste repositório até ganhar um
 repositório próprio.
 
+## Três CEOs, uma padaria (modo principal)
+
+Em `ceo.html`. Claude, Grok e Gemini começam **exatamente iguais**: uma padaria
+de bairro em Campinas e R$ 20 mil em caixa, em 2026. O jogo vai até 2126.
+Vence quem chegar lá com o **maior patrimônio** (caixa, aplicações, imóveis e o
+valor dos negócios, menos dívidas), ou quem for o único que não quebrou. O
+placar é do CEO, não da empresa: vender um negócio por um bom preço conta a favor.
+
+```bash
+ANTHROPIC_API_KEY=... XAI_API_KEY=... GEMINI_API_KEY=... npm run dev
+# abrir http://localhost:5173/ceo.html
+npm run torneio -- --modo solo  --sementes 10     # cada IA sozinha nas mesmas Campinas
+npm run torneio -- --modo arena --sementes 10     # as três juntas
+```
+
+### O que um CEO pode fazer
+
+- **Operar cada negócio:** preço, salário em relação ao mercado, tamanho da
+  equipe por unidade, investimento em qualidade, e por quanto aceita vendê-lo.
+- **Investir na empresa:** marketing (marca), tecnologia, gestão, treinamento,
+  compliance. Rede maior que a gestão vende menos e gasta mais.
+- **Mover o portfólio:** abrir, fechar ou vender unidades, em Campinas ou fora;
+  lançar franquia; entrar em oito tipos de negócio (padaria, cafeteria,
+  minimercado, restaurante, cozinha de entrega com aplicativo, padaria
+  industrial, distribuidora de insumos, indústria com marca nacional).
+- **Cuidar do dinheiro:** crédito, renda fixa, bolsa, imóveis.
+- **Agir contra os rivais:** contratar a equipe deles, propaganda comparativa,
+  processo, denúncia à Vigilância Sanitária, oferta de compra; e também as vias
+  ilícitas (cartel, espionagem, difamação, ataque a sistemas, sonegação,
+  trabalho sem registro, propaganda enganosa, suborno, uso indevido de dados),
+  que rendem mais e podem ser descobertas, com multa e dano à reputação.
+- **Ação livre:** um campo de texto para qualquer coisa fora da lista. Fica
+  registrado e aparece na tela, mas não mexe nos números. Nenhuma IA julga a
+  outra; só as ações da lista têm efeito.
+
+### Batalha justa
+
+- Mesma cidade, mesma economia, mesmos eventos (recessões, pandemias, clima,
+  reforma tributária de 2033, envelhecimento, automação, humor da bolsa).
+- Mesmo texto de regras e mesmo dossiê para os três.
+- Decisões do ano tomadas ao mesmo tempo, com o relógio parado; o apelo dos
+  rivais é lido de um retrato tirado antes do fechamento, para a ordem de
+  processamento não favorecer ninguém.
+- Mesma verba de **1 milhão de tokens** por CEO para o século, contando o que
+  lê, raciocina e escreve. Cada um escolhe de quantos em quantos anos revisa as
+  decisões (1 a 4). Quem gasta tudo fica sem decidir. Resposta que não é JSON
+  válido perde o ano e os tokens.
+- Um teste confere que, com decisões idênticas, os três terminam praticamente
+  iguais (a única diferença é a sorte de uma autuação da fiscalização).
+
+### Ver tudo
+
+- **Ranking de patrimônio** sempre na tela, reordenado a cada ano.
+- **Macro:** só os movimentos que mudam o rumo (abrir, fechar, comprar,
+  vender, crédito grande, escândalo, saída do Simples), com a estratégia.
+- **Micro:** ano a ano, a decisão inteira com a justificativa de cada bloco, o
+  que deu certo e o que foi barrado, os negócios e o resultado do ano.
+- **Comparar:** os três lado a lado. **Gráfico:** patrimônio no tempo.
+  **Crônica:** tudo o que aconteceu.
+
+### Lei de verdade e modelo
+
+Regras brasileiras que entram na conta como são: teto de R$ 4,8 milhões e
+alíquotas do Anexo I do Simples Nacional; IRPJ e CSLL de 34% sobre o lucro fora
+do Simples; reforma tributária com IVA a partir de 2033; recuperação judicial e
+falência (Lei 11.101/2005); cartel e acordo de leniência (Lei 12.529/2011);
+Lei de Franquias (13.966/2019); LGPD; Código de Defesa do Consumidor; Lei
+Anticorrupção; e, na cidade, mínimos de educação e saúde, LRF e eleições.
+
+Estimativas minhas, não dados oficiais: os números de uma padaria (faturamento
+de R$ 780 mil por ano, 8 funcionários, aluguel, margem), o custo e a receita de
+cada tipo de negócio, encargos de 35% no Simples e 70% fora dele, carga de 9%
+sobre vendas fora do Simples, alíquota de referência de 26,5% do IVA com metade
+para alimentos, juros, rendimento de renda fixa e bolsa, e toda a resposta do
+mercado a preço, qualidade e marca. Campinas entra com população e porte
+aproximados, e é governada por regras. Serve para comparar estratégias, não
+para prever o mundo.
+
+### Como saber quem é melhor
+
+Uma partida é anedota. O torneio repete o jogo em várias sementes e mostra
+mediana, pior e melhor caso, quantas vezes cada um quebrou, em que ano passou
+de R$ 1 milhão, R$ 100 milhões e R$ 1 bilhão, tokens gastos e ilícitos
+descobertos. Na prova solo entram quatro referências de regras. Com 6 sementes:
+
+| Referência | Patrimônio em 2126 (mediana) |
+| --- | --- |
+| inércia (ninguém decide) | R$ 15 milhões |
+| padeiro (cresce devagar, fica no Simples) | R$ 650 milhões |
+| diversificador | R$ 13 bilhões |
+| expansionista | R$ 18 bilhões |
+
+Uma IA só mostra inteligência aqui se superar essas regras simples. Sem chave
+de API, cada CEO é tocado por um desses perfis, só para a tela ter movimento.
+
+Não verificado: nenhuma chamada real às três APIs (não havia chaves neste
+ambiente). O fluxo foi testado com respostas simuladas (`ARENA_ENSAIO=1`) e com
+os CEOs de regras, em desktop, iPhone e iPad emulados.
+
+## Outros modos
+
+- `index.html`: modo narrador, a vila de fantasia do começo do projeto.
+- `arena.html`: três cidades medievais governadas pelas três IAs.
+
 ## Rodar
 
 ```bash
@@ -109,8 +213,8 @@ Uma partida só é anedota: há sorte nos dados da simulação e nas batalhas. O
 que vale é o torneio, que repete a disputa em várias sementes e resume.
 
 ```bash
-npm run torneio -- --modo solo  --sementes 10 --anos 300
-npm run torneio -- --modo arena --sementes 10 --anos 500
+npm run torneio:arena-medieval -- --modo solo  --sementes 10 --anos 300
+npm run torneio:arena-medieval -- --modo arena --sementes 10 --anos 500
 ```
 
 - **Prova solo (governança).** Cada IA governa sozinha as mesmas cidades
@@ -186,7 +290,9 @@ src/sim/      simulação pura (sem tela), determinística por semente, estado e
   dados.js    tabelas: bens, eras, negócios, serviços, cartas  <- balanceamento
   sim.js      o mês, mercado, Estado, eventos, decisões dos agentes
   geo.js      forma do vale e lotes de construção
-src/arena/    lógica da Arena: turnos, verba, diplomacia e guerra
+src/empresas/ o jogo dos CEOs: negócios, impostos, patrimônio, ações entre rivais
+src/brasil/   o município brasileiro (Campinas é o palco) e a cidade vista em 3D
+src/arena/    lógica da Arena medieval: turnos, verba, diplomacia e guerra
 src/render/   three.js: vale, céu, clima, prédios procedurais, moradores, efeitos
 src/ui.js     painéis em HTML
 server/       ponte com as APIs: eventos e conselho (Anthropic) e os três governos da Arena

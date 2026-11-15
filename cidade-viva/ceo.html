@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#3b2a1a" />
+  <title>Três CEOs, uma padaria — Cidade Viva</title>
+  <style>
+    :root {
+      --papel: #f6ecd2; --papel2: #eadbb6; --tinta: #3b2a1a; --tinta2: #7a6248; --borda: #b6935a; --ouro: #d9a13a; --bom: #3f8a3c; --ruim: #b23a3a;
+      --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --m: 8px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1533; color: var(--tinta); overscroll-behavior: none;
+      font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-size: 14px; -webkit-user-select: none; user-select: none; }
+    canvas#cena { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    #vinheta { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(20, 12, 30, .34) 100%); }
+    .painel { background: linear-gradient(180deg, var(--papel), var(--papel2)); border: 2px solid var(--borda); border-radius: 12px; box-shadow: 0 3px 0 #8a6a3a, 0 8px 22px rgba(0, 0, 0, .35); }
+    button { font: inherit; color: var(--tinta); cursor: pointer; background: #fff7e2; border: 1.5px solid var(--borda); border-radius: 9px; padding: 6px 10px; touch-action: manipulation; }
+    button:active { transform: scale(.96); }
+    button.ativo { background: var(--ouro); border-color: #8a6a3a; color: #fff; }
+    a { color: var(--tinta2); }
+
+    #topo { position: fixed; top: calc(var(--m) + var(--st)); left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); display: flex; flex-direction: column; gap: 6px; }
+    #cab { padding: 6px 10px; display: flex; align-items: center; gap: 8px; }
+    #cab .tit { flex: 1; min-width: 0; }
+    #cab h1 { margin: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #quando { font-size: 12px; color: var(--tinta2); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #ano { font-size: 24px; font-weight: bold; letter-spacing: .5px; }
+    #velocidade { display: flex; gap: 4px; }
+    #velocidade button { min-width: 36px; height: 36px; padding: 0 5px; font-size: 13px; }
+
+    /* ranking: sempre visível, ordenado pelo patrimônio */
+    #ranking { padding: 6px 8px; position: relative; }
+    #ranking h2 { margin: 0 0 4px; font-size: 12px; font-weight: normal; color: var(--tinta2); letter-spacing: 1px; text-transform: uppercase; }
+    .linhas { position: relative; }
+    .lin { position: absolute; left: 0; right: 0; height: 46px; display: grid; grid-template-columns: 26px minmax(74px, auto) 1fr auto; align-items: center; gap: 6px;
+      padding: 0 8px 0 4px; border-radius: 9px; border: 1.5px solid transparent; background: rgba(255, 255, 255, .45); cursor: pointer; transition: transform .7s cubic-bezier(.2, .9, .2, 1), background .3s; text-align: left; }
+    .lin.vista { border-color: var(--tinta); background: rgba(255, 255, 255, .85); }
+    .lin.fora { opacity: .5; }
+    .lin .pos { font-size: 18px; text-align: center; }
+    .lin .quem { line-height: 1.1; white-space: nowrap; }
+    .lin .quem b { font-size: 15px; } .lin .quem small { display: block; font-size: 11px; color: var(--tinta2); overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+    .lin .barra { height: 12px; border-radius: 12px; background: #d8c9a2; overflow: hidden; min-width: 30px; }
+    .lin .barra i { display: block; height: 100%; border-radius: 12px; transition: width .7s; }
+    .lin .val { text-align: right; line-height: 1.1; white-space: nowrap; }
+    .lin .val b { font-size: 16px; font-variant-numeric: tabular-nums; } .lin .val small { display: block; font-size: 11px; }
+    .sobe { color: var(--bom); } .desce { color: var(--ruim); }
+    .lin.pensa .quem small { color: #8a5fc9; font-weight: bold; }
+
+    #toasts { position: fixed; left: calc(var(--m) + var(--sl)); top: calc(var(--st) + 250px); width: min(330px, calc(100vw - 20px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+    .toast { padding: 6px 10px; border-radius: 9px; background: rgba(59, 42, 26, .9); color: #fff3d6; line-height: 1.25; font-size: 13px; border-left: 5px solid #cbb78a; animation: entra .35s ease-out, some .6s ease-in 6s forwards; }
+    @keyframes entra { from { opacity: 0; transform: translateX(-24px); } }
+    @keyframes some { to { opacity: 0; transform: translateY(-8px); } }
+
+    #baixo { position: fixed; left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); bottom: calc(var(--m) + var(--sb)); display: flex; flex-direction: column; }
+    #abas { display: flex; gap: 4px; padding: 6px 8px; border-bottom: 1.5px solid var(--borda); align-items: center; overflow-x: auto; scrollbar-width: none; }
+    #abas::-webkit-scrollbar { display: none; }
+    #abas button { padding: 4px 9px; flex: 0 0 auto; }
+    #abas .esp { flex: 1; }
+    #conteudo { overflow-y: auto; padding: 8px 10px 10px; height: 34vh; -webkit-overflow-scrolling: touch; line-height: 1.38; -webkit-user-select: text; user-select: text; }
+    #baixo.recolhido #conteudo { display: none; } #baixo.recolhido #abas { border: 0; }
+    #conteudo h3 { margin: 0 0 4px; font-size: 15px; }
+    #conteudo h4 { margin: 10px 0 2px; font-size: 13px; color: var(--tinta2); font-weight: normal; letter-spacing: .6px; text-transform: uppercase; }
+    .rot { color: var(--tinta2); font-size: 12px; }
+    .porque { margin: 2px 0 0; padding: 4px 8px; border-left: 3px solid var(--ouro); background: rgba(255, 255, 255, .45); border-radius: 0 6px 6px 0; font-style: italic; }
+    .nota { margin: 2px 0; padding-left: 20px; position: relative; }
+    .nota::before { content: '✓'; position: absolute; left: 3px; color: var(--bom); font-weight: bold; }
+    .nota.nao::before { content: '✗'; color: var(--ruim); }
+    .anoBloco { margin: 0 0 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, .4); border-left: 4px solid var(--borda); }
+    .anoBloco b.a { font-size: 15px; }
+    .nav { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .nav button { padding: 3px 12px; } .nav b { font-size: 17px; min-width: 52px; text-align: center; }
+    .nav input { flex: 1; min-width: 0; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    td, th { padding: 3px 6px; border-bottom: 1px solid #d8c9a2; text-align: right; white-space: nowrap; }
+    td:first-child, th:first-child { text-align: left; color: var(--tinta2); white-space: normal; }
+    th { font-weight: bold; }
+    #grafico { width: 100%; height: 170px; display: block; }
+    .legenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
+    .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+    .tag { display: inline-block; padding: 0 7px; border-radius: 20px; background: var(--tinta); color: var(--papel); font-size: 11px; }
+
+    #pensando { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 9px 20px; background: rgba(59, 42, 26, .9); color: #ffe9b0; border-radius: 30px; border: 2px solid var(--ouro); opacity: 0; transition: opacity .3s; pointer-events: none; }
+    #pensando.visivel { opacity: 1; }
+    #faixa { position: fixed; left: 0; right: 0; top: 40%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .8s; }
+    #faixa.visivel { opacity: 1; }
+    #faixa div { display: inline-block; padding: 12px 36px; background: rgba(59, 42, 26, .92); color: #ffe9b0; border-top: 3px solid var(--ouro); border-bottom: 3px solid var(--ouro); }
+    #faixa small { display: block; letter-spacing: 3px; font-size: 12px; text-transform: uppercase; opacity: .85; }
+    #faixa b { font-size: clamp(20px, 5.5vw, 32px); }
+
+    @media (min-width: 1000px) {
+      :root { --m: 12px; }
+      #topo { right: auto; width: 470px; }
+      #cab h1 { font-size: 19px; }
+      #baixo { left: auto; width: 520px; top: calc(var(--m) + var(--st)); }
+      #conteudo { height: auto; flex: 1; }
+      #baixo.recolhido { top: auto; }
+      #toasts { top: calc(var(--st) + 290px); }
+    }
+    @media (max-height: 480px) {
+      #ranking h2 { display: none; } .lin { height: 30px; } .lin .quem small, .lin .val small { display: none; }
+      #conteudo { height: 40vh; } #toasts { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="cena"></canvas>
+  <div id="vinheta"></div>
+
+  <div id="topo">
+    <section id="cab" class="painel">
+      <div class="tit"><h1>Três CEOs, uma padaria</h1><div id="quando"></div></div>
+      <div id="ano"></div>
+      <div id="velocidade">
+        <button data-v="0" aria-label="Pausar">⏸</button>
+        <button data-v="0.3" aria-label="Um ano a cada três segundos">▶</button>
+        <button data-v="1.2" aria-label="Rápido">▶▶</button>
+        <button data-v="5" aria-label="Muito rápido">▶▶▶</button>
+      </div>
+    </section>
+    <section id="ranking" class="painel">
+      <h2>Patrimônio agora</h2>
+      <div class="linhas" id="linhas"></div>
+    </section>
+  </div>
+
+  <div id="toasts"></div>
+
+  <section id="baixo" class="painel">
+    <div id="abas">
+      <button data-aba="macro" class="ativo">Macro</button>
+      <button data-aba="micro">Micro</button>
+      <button data-aba="comparar">Comparar</button>
+      <button data-aba="grafico">Gráfico</button>
+      <button data-aba="cronica">Crônica</button>
+      <button data-aba="regras">Regras</button>
+      <span class="esp"></span>
+      <button id="recolher" aria-label="Recolher">▾</button>
+    </div>
+    <div id="conteudo"></div>
+  </section>
+
+  <div id="pensando">Os CEOs estão decidindo…</div>
+  <div id="faixa"><div><small id="faixa-topo"></small><b id="faixa-texto"></b></div></div>
+
+  <script type="module" src="/src/ceo-main.js"></script>
+</body>
+</html>

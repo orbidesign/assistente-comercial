@@ -68,19 +68,21 @@ export function rnd(m) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-// Cidade média do interior, em 2026.
-export function criarMunicipio(semente, nome) {
+// Cidade média do interior, em 2026. opcoes.escala multiplica o porte (Campinas: 9,5)
+// e opcoes.produtividade ajusta a riqueza por trabalhador.
+export function criarMunicipio(semente, nome, opcoes = {}) {
+  const k = opcoes.escala || 1;
   const m = {
     nome, ano: ANO_INICIAL, rng: semente | 0,
-    pop: 120000, idosos: 0.16, criancas: 0.2,
-    formais: 35000, informais: 20000, produtividade: 104, pib: 0, desemprego: 0, renda: 0,
+    pop: 120000 * k, idosos: 0.16, criancas: 0.2,
+    formais: 35000 * k, informais: 20000 * k, produtividade: opcoes.produtividade || 104, pib: 0, desemprego: 0, renda: 0,
     gini: 0.52, pobreza: 0.18, informalidade: 0.37,
     ind: {
       ideb: 5.4, creche: 0.38, capitalHumano: 0.45, atencaoBasica: 0.7, mortInfantil: 12, expVida: 76, homicidios: 22,
       infra: 0.55, esgoto: 0.55, deficitHab: 0.08, resiliencia: 0.3, digital: 0.3, integridade: 0.5, lazer: 0.45, atratividade: 0.5,
     },
     pol: { iptu: 0.01, iss: 0.03, itbi: 0.02, pgv: 0.6, orcamento: { ...ORCAMENTO_INICIAL }, superavit: 0.02, salario: 1, quadro: 1, programas: {}, rppsReformado: false, articulacao: 1 },
-    fin: { caixa: 30, divida: 60, receita: {}, despesa: {}, rcl: 600, pessoal: 0.47, histIBS: 0, capag: 'B' },
+    fin: { caixa: 30 * k, divida: 60 * k, receita: {}, despesa: {}, rcl: 600, pessoal: 0.47, histIBS: 0, capag: 'B' },
     politica: { aprovacao: 0.52, base: 0.55, noPoder: true, eleicoes: [], contasRejeitadas: 0, reprovadaNoMandato: false, altaDeImposto: 0 },
     hist: [], diario: [], bonus: {},
   };

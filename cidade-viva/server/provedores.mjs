@@ -131,70 +131,65 @@ Responda apenas com um objeto JSON, sem texto fora dele, com exatamente estes ca
   "proxima_reuniao_anos": daqui a quantos anos você volta a se reunir (5 a 50, em múltiplos de 5)
 }`;
 
-// ---------- o prefeito brasileiro (2026 a 2126) ----------
+// ---------- o CEO: da padaria de bairro em Campinas até 2126 ----------
 
-const FUNCOES_BR = ['educacao', 'saude', 'seguranca', 'infraestrutura', 'saneamento', 'habitacao', 'assistencia', 'meio_ambiente', 'desenvolvimento', 'cultura', 'administracao'];
 const txt = { type: 'string' }, n = { type: 'number' };
-const ESQUEMA_BR = obj({
+const ESQUEMA_CEO = obj({
   diagnostico: txt, estrategia: txt,
-  tributos: obj({ iptu: n, iss: n, itbi: n, atualizar_planta_de_valores: { type: 'boolean' }, justificativa: txt }),
-  orcamento: obj({ ...Object.fromEntries(FUNCOES_BR.map((f) => [f, n])), meta_de_superavit_pct: n, justificativa: txt }),
-  pessoal: obj({ reajuste_real_pct: n, concurso: { type: 'string', enum: ['nenhum', 'reposicao', 'ampliacao'] }, reforma_previdencia: { type: 'boolean' }, justificativa: txt }),
-  programas: obj({ criar: { type: 'array', items: txt }, encerrar: { type: 'array', items: txt }, justificativa: txt }),
-  credito: obj({ valor_milhoes: n, destino: txt, justificativa: txt }),
-  rivais: obj({ guerra_fiscal_contra: txt, campanha_atrair_moradores: { type: 'boolean' }, propor_consorcio_a: txt, disputar_edital_federal: txt, justificativa: txt }),
-  oficio: obj({ para: txt, texto: txt }),
-  articulacao_politica: { type: 'integer' }, fala: txt, memoria: txt, proxima_revisao_anos: { type: 'integer' },
+  movimentos: { type: 'array', items: obj({ acao: { type: 'string', enum: ['abrir', 'fechar', 'vender', 'lancar_franquia'] }, negocio: txt, quantidade: { type: 'integer' }, onde: { type: 'string', enum: ['campinas', 'fora'] }, justificativa: txt }) },
+  operacoes: { type: 'array', items: obj({ negocio: txt, preco_indice: n, salario_indice: n, funcionarios_por_unidade: n, investir_em_qualidade: n, vendo_por: n, justificativa: txt }) },
+  gestao: obj({ marketing: n, tecnologia: n, gestao: n, treinamento: n, compliance: n, justificativa: txt }),
+  financas: obj({ tomar_emprestimo: n, amortizar_divida: n, aplicar_renda_fixa: n, resgatar_renda_fixa: n, aplicar_bolsa: n, resgatar_bolsa: n, comprar_imoveis: n, vender_imoveis: n, justificativa: txt }),
+  acoes_externas: { type: 'array', items: obj({ tipo: txt, alvo: txt, negocio: txt, recursos: n, justificativa: txt }) },
+  acao_livre: txt, fala: txt, memoria: txt, proxima_revisao_anos: { type: 'integer' },
 });
 
-export const SISTEMA_BRASIL = `Você é o prefeito de uma cidade média do interior do Brasil. O jogo começa em 2026 e termina em 2126. Outras duas cidades, idênticas à sua em 2026, são governadas por outras inteligências artificiais. Vence quem construir a cidade mais próspera e imponente, no menor tempo. Pontos: metade é IDHM (educação, longevidade, renda); o resto é o tamanho da economia, a qualidade urbana e a saúde fiscal.
+export const SISTEMA_CEO = `Você é um empresário em Campinas (SP). Em 2026 você tem uma padaria de bairro e R$ 20 mil em caixa. Dois rivais, cada um comandado por outra inteligência artificial, começam exatamente iguais. O jogo vai até 2126. Vence quem chegar lá com o maior patrimônio (caixa, aplicações, imóveis e o valor dos negócios, menos as dívidas), ou quem for o único que não quebrou. O placar é o seu patrimônio, não o tamanho de uma empresa.
 
-Você governa dentro das regras brasileiras:
-- Mínimos constitucionais: 25% da receita de impostos e transferências em educação e 15% em saúde. Abaixo disso o Tribunal de Contas rejeita suas contas e sua candidatura é impugnada na eleição seguinte.
-- Lei de Responsabilidade Fiscal: folha de pagamento até 54% da receita corrente líquida. Acima de 51,3% ficam vedados reajustes e contratações; acima de 54% a cidade perde transferências voluntárias.
-- Dívida até 1,2 vez a receita. Crédito só com nota A ou B de capacidade de pagamento.
-- ISS entre 2% e 5%; IPTU entre 0,3% e 1,5% do valor venal; ITBI até 3%. Aumentar imposto ou atualizar a planta de valores do IPTU depende de maioria na Câmara (veja "base_na_camara") e custa aprovação.
-- Reforma tributária: de 2029 a 2032 o ISS e a cota de ICMS encolhem e em 2033 acabam, substituídos pelo IBS, que é repartido cada vez mais pelo local do consumo (população e renda) até 2077. Baixar o ISS para atrair empresas perde força nesse período.
-- Eleições a cada quatro anos (2028, 2032, ...). Se perder, a oposição governa quatro anos com o orçamento congelado e você fica sem decidir.
-- A população do país para de crescer por volta de 2041 e envelhece: a previdência dos servidores pesa cada vez mais, e as cidades passam a disputar moradores. A automação elimina empregos de rotina entre 2032 e 2060, mais onde a qualificação é baixa. Eventos climáticos extremos ficam mais frequentes; cidade sem drenagem e defesa civil paga caro.
+O caminho é livre e você precisa pensar em tudo: preço, qualidade, equipe e salários, marketing, tecnologia, gestão, impostos, crédito, quando abrir filiais, quando sair de Campinas, se vale franquear, montar uma padaria industrial, entrar em outros negócios, comprar ou vender negócios, aplicar em renda fixa, bolsa ou imóveis. Os valores são em reais por ano, a preços de 2026. O dossiê traz o catálogo de negócios com investimento e receita típica, as regras de impostos e o que os rivais estão fazendo.
 
-Contra as rivais, tudo é estratégia: guerra fiscal para tirar empresas delas, campanha para atrair moradores, disputa do edital federal do ano, ou consórcio (só vale se as duas propõem no mesmo ano). Você também pode mandar um ofício.
+Fatos do mundo que pesam:
+- Uma rede só cresce até onde a gestão alcança: veja "carga_de_gestao" e "capacidade_de_gestao". Rede maior que a gestão vende menos e gasta mais.
+- Campinas satura: muitas unidades do mesmo negócio na cidade dividem a clientela. Fora de Campinas não satura tão cedo, mas exige mais gestão.
+- Passar de R$ 4,8 milhões de faturamento tira você do Simples Nacional: imposto e encargos sobem bastante.
+- Sem investimento, qualidade, marca, tecnologia e gestão voltam ao padrão comum, e o mercado melhora um pouco todo ano.
+- Salário abaixo do mercado derruba o atendimento e pode dar greve; salário acima melhora o atendimento e atrai gente da concorrência.
+- Sem caixa e sem crédito você entra em recuperação judicial por dois anos; se não sair, quebra e o jogo acaba para você.
+- O país muda no século: reforma tributária em 2033, população que para de crescer por volta de 2041 e envelhece, automação, recessões, pandemias, eventos climáticos.
 
-Tokens são o seu recurso mais escasso. Os três prefeitos têm a mesma verba para o século inteiro (veja "tokens"). Tudo o que você lê, raciocina e escreve conta. Você escolhe de quantos em quantos anos revisa o governo (1 a 4); nos anos sem revisão, vale o que estava decidido.
+Contra os rivais, tudo é estratégia. "acoes_externas_possiveis" lista o que existe, com a lei de cada uma. As ilícitas rendem mais e podem ser descobertas, com multa, dano à reputação e, em alguns casos, afastamento. A escolha e o risco são seus.
 
-Suas justificativas serão lidas por quem assiste ao jogo: explique em cada bloco, de forma concreta e curta, por que decidiu assim (o que viu nos números, o que espera que aconteça, o que está trocando por quê). Responda apenas com um objeto JSON, sem texto fora dele:
+Tokens são o seu recurso mais escasso. Os três têm a mesma verba para o século (veja "tokens"). Tudo o que você lê, raciocina e escreve conta. Você escolhe de quantos em quantos anos revisa as decisões (1 a 4): nos anos sem revisão, preço, salários e equipe ficam como estão e nada novo é investido.
+
+Quem assiste lê as suas justificativas. Em cada bloco, explique de forma concreta e curta por que decidiu assim: o número que viu, o que espera que aconteça, o que está trocando por quê. Responda apenas com um objeto JSON, sem texto fora dele:
 {
-  "diagnostico": "o que você vê na cidade agora, em duas ou três frases",
-  "estrategia": "seu plano para os próximos anos e o que mudou em relação ao anterior",
-  "tributos": { "iptu": % sobre o valor venal, "iss": %, "itbi": %, "atualizar_planta_de_valores": true ou false, "justificativa": "..." },
-  "orcamento": { ${FUNCOES_BR.map((f) => `"${f}": %`).join(', ')}, "meta_de_superavit_pct": % da receita a poupar (0 a 15), "justificativa": "..." },
-  "pessoal": { "reajuste_real_pct": % acima da inflação (pode ser 0), "concurso": "nenhum" | "reposicao" | "ampliacao", "reforma_previdencia": true ou false, "justificativa": "..." },
-  "programas": { "criar": [até 3 ids de "programas_disponiveis"], "encerrar": [ids de "programas_ativos"], "justificativa": "..." },
-  "credito": { "valor_milhoes": número ou 0, "destino": uma função do orçamento, "justificativa": "..." },
-  "rivais": { "guerra_fiscal_contra": nome de cidade ou "", "campanha_atrair_moradores": true ou false, "propor_consorcio_a": nome de cidade ou "", "disputar_edital_federal": uma função do orçamento ou "", "justificativa": "..." },
-  "oficio": { "para": nome de cidade ou "", "texto": "..." },
-  "articulacao_politica": 0 a 3 (esforço em Brasília e na Câmara: rende convênios e base, mas aumenta o risco de escândalo),
+  "diagnostico": "o que você vê agora, em duas ou três frases",
+  "estrategia": "seu plano para os próximos anos e o que mudou",
+  "movimentos": [ { "acao": "abrir" | "fechar" | "vender" | "lancar_franquia", "negocio": um do catálogo, "quantidade": número, "onde": "campinas" | "fora", "justificativa": "..." } ],
+  "operacoes": [ { "negocio": um que você tem, "preco_indice": 1 é o preço comum do mercado, "salario_indice": 1 é o salário de mercado, "funcionarios_por_unidade": número, "investir_em_qualidade": reais, "vendo_por": valor pelo qual aceita vender esse negócio inteiro a um rival, ou 0, "justificativa": "..." } ],
+  "gestao": { "marketing": reais, "tecnologia": reais, "gestao": reais, "treinamento": reais, "compliance": reais, "justificativa": "..." },
+  "financas": { "tomar_emprestimo": reais, "amortizar_divida": reais, "aplicar_renda_fixa": reais, "resgatar_renda_fixa": reais, "aplicar_bolsa": reais, "resgatar_bolsa": reais, "comprar_imoveis": reais, "vender_imoveis": reais, "justificativa": "..." },
+  "acoes_externas": [ { "tipo": um de "acoes_externas_possiveis", "alvo": nome do CEO rival ou "", "negocio": para oferta de compra, "recursos": reais, "justificativa": "..." } ],
+  "acao_livre": "qualquer outra coisa que você faria e que não cabe nos campos acima; fica registrada para quem assiste, mas não muda os números",
   "fala": "uma frase pública sua, em primeira pessoa",
   "memoria": "nota para você mesmo ler na próxima reunião (sua única memória)",
   "proxima_revisao_anos": 1 a 4
 }
-Os percentuais do orçamento são normalizados para somar 100.`;
+Use listas vazias e zeros onde não quiser agir.`;
 
-function ensaioBrasil(s) {
-  const o = { ...s.orcamento_atual_pct, justificativa: 'Ensaio: mantenho a distribuição e reforço a educação aos poucos.' };
-  o.educacao += 0.5; o.meta_de_superavit_pct = 3;
-  const cabe = s.programas_disponiveis.find((p) => p.custo_inicial_milhoes < s.indicadores.caixa * 0.5);
+function ensaioCEO(s) {
+  const tem = s.negocios[0];
+  const sobra = Math.max(0, s.caixa - s.receita_total * 0.03);
   return {
     texto: JSON.stringify({
-      diagnostico: `Ensaio: ${s.cidade} em ${s.ano}, IDHM ${s.indicadores.idhm}.`, estrategia: 'Ensaio: educação primeiro, contas em ordem.',
-      tributos: { iptu: s.tributos_atuais.iptu_pct, iss: s.tributos_atuais.iss_pct, itbi: s.tributos_atuais.itbi_pct, atualizar_planta_de_valores: false, justificativa: 'Ensaio: sem mexer em impostos.' },
-      orcamento: o, pessoal: { reajuste_real_pct: 0, concurso: 'reposicao', reforma_previdencia: false, justificativa: 'Ensaio.' },
-      programas: { criar: cabe ? [cabe.id] : [], encerrar: [], justificativa: cabe ? `Ensaio: cabe no caixa criar ${cabe.nome}.` : 'Ensaio: sem caixa.' },
-      credito: { valor_milhoes: 0, destino: 'infraestrutura', justificativa: 'Ensaio.' },
-      rivais: { guerra_fiscal_contra: '', campanha_atrair_moradores: false, propor_consorcio_a: '', disputar_edital_federal: 'saneamento', justificativa: 'Ensaio: disputo o edital.' },
-      oficio: { para: '', texto: '' }, articulacao_politica: 1, fala: `Ensaio de ${s.cidade}.`, memoria: 'ensaio', proxima_revisao_anos: 1,
+      diagnostico: `Ensaio: ${s.voce} em ${s.ano}, patrimônio de ${s.patrimonio}.`, estrategia: 'Ensaio: reinvestir o lucro na padaria e abrir uma segunda quando o caixa permitir.',
+      movimentos: sobra > 180000 && s.capacidades.capacidade_de_gestao > s.capacidades.carga_de_gestao + 1 ? [{ acao: 'abrir', negocio: 'padaria', quantidade: 1, onde: 'campinas', justificativa: 'Ensaio: o caixa cobre uma unidade.' }] : [],
+      operacoes: tem ? [{ negocio: tem.negocio, preco_indice: 1, salario_indice: 1, funcionarios_por_unidade: tem.funcionarios_por_unidade, investir_em_qualidade: sobra * 0.1, vendo_por: 0, justificativa: 'Ensaio: mantenho preço e reforço a qualidade.' }] : [],
+      gestao: { marketing: sobra * 0.1, tecnologia: sobra * 0.05, gestao: sobra * 0.1, treinamento: sobra * 0.03, compliance: sobra * 0.02, justificativa: 'Ensaio.' },
+      financas: { tomar_emprestimo: 0, amortizar_divida: 0, aplicar_renda_fixa: 0, resgatar_renda_fixa: 0, aplicar_bolsa: 0, resgatar_bolsa: 0, comprar_imoveis: 0, vender_imoveis: 0, justificativa: 'Ensaio.' },
+      acoes_externas: [], acao_livre: 'Ensaio: conversar com os clientes no balcão.', fala: `Ensaio de ${s.voce}.`, memoria: 'ensaio', proxima_revisao_anos: 1,
     }),
-    entrada: 3200, saida: 900,
+    entrada: 3600, saida: 900,
   };
 }
 
@@ -203,9 +198,9 @@ function ensaioBrasil(s) {
 // cobrada: quem erra o formato perde a reunião e os tokens.
 export async function decidir(id, situacao, jogo = 'arena') {
   const cfg = PROVEDORES[id];
-  const br = jogo === 'brasil';
-  const r = env.ARENA_ENSAIO === '1' ? (br ? ensaioBrasil(situacao) : ensaio(situacao))
-    : await CHAMAR[id](cfg, br ? SISTEMA_BRASIL : SISTEMA_ARENA, JSON.stringify(situacao), br ? ESQUEMA_BR : ESQUEMA);
+  const ceo = jogo === 'ceo';
+  const r = env.ARENA_ENSAIO === '1' ? (ceo ? ensaioCEO(situacao) : ensaio(situacao))
+    : await CHAMAR[id](cfg, ceo ? SISTEMA_CEO : SISTEMA_ARENA, JSON.stringify(situacao), ceo ? ESQUEMA_CEO : ESQUEMA);
   const custo = (r.entrada * cfg.precos[0] + r.saida * cfg.precos[1]) / 1e6;
   let decisao = null;
   try { decisao = extrairJSON(r.texto); } catch { /* resposta inválida */ }

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { criarMunicipio, avancarAno, aplicarDecisao, cenarioDoAno, prefeitoPorRegras, calcularReceita, fatiaISS, pontos, LEIS, ANO_FINAL } from '../src/brasil/municipio.js';
-import { criarDisputa, despachar, avancarDisputa, naVez, temTokens, registrarTokens, dossie, terminou, PREFEITOS, TOKENS_SECULO } from '../src/brasil/disputa.js';
 
 const seculo = (perfil, semente = 3) => {
   const m = criarMunicipio(semente, 'Teste');
@@ -59,20 +58,10 @@ test('governar importa: o prefeito técnico termina o século bem à frente da i
   assert.equal(JSON.stringify(seculo('tecnico')), JSON.stringify(t), 'determinístico');
 });
 
-test('disputa: cidades iguais em 2026, gabinete registra tudo, tokens iguais para os três', () => {
-  const d = criarDisputa(9);
-  assert.equal(new Set(d.cidades.map((c) => JSON.stringify({ ...c.m, nome: '' }))).size, 1);
-  while (!terminou(d)) {
-    for (const c of d.cidades) if (naVez(d, c)) despachar(d, c, { ...prefeitoPorRegras(c.m, PREFEITOS[c.id].perfil), diagnostico: 'd', estrategia: 'e', tributos: { justificativa: 'porque sim' }, rivais: { disputar_edital_federal: 'saneamento' } }, 'regras');
-    avancarDisputa(d);
-  }
-  assert.equal(d.ano, 2126);
-  const g = d.cidades[0].gabinete;
-  assert.ok(g.length > 40 && g[0].ano === 2026 && g[0].decisao.tributos.justificativa === 'porque sim' && g[0].politica.orcamento.educacao > 20);
-  assert.ok(d.log.some((l) => l.texto.includes('edital federal')));
-  const c = d.cidades[1];
-  registrarTokens(c, TOKENS_SECULO - 100);
-  assert.ok(!temTokens(c));
-  assert.equal(dossie(d, c).tokens.restantes_ate_2126, 100);
-  JSON.parse(JSON.stringify(d));
+test('intervenção estadual: dois anos seguidos no vermelho tiram o prefeito por dois anos', () => {
+  const m = criarMunicipio(6, 'T');
+  m.fin.caixa = -400;
+  for (let a = 2026; a < 2028; a++) avancarAno(m, cenarioDoAno(6, a));
+  assert.ok(m.politica.intervencao > 0 && !m.politica.noPoder);
+  assert.ok(m.diario.some((x) => x.texto.includes('art. 35')));
 });

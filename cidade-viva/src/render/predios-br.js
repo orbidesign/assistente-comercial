@@ -41,24 +41,27 @@ const M = {
     g.add(caixa(c, 3.2, 3.3, 3), piramide(TELHA, 3.9, 0.9, 3.7, 0, 3.3), caixa(0x5d4028, 0.6, 1.1, 0.08, -0.9, 0, 1.51), caixa(0x8a8a90, 1.3, 1.1, 0.08, 0.7, 0, 1.51));
     g.add(jan(-0.8, 2.3, 1.51), jan(0.8, 2.3, 1.51), caixa(CONCRETO, 3.2, 0.1, 0.7, 0, 1.75, 1.8), caixa(0x3a3a40, 3.2, 0.5, 0.05, 0, 1.85, 2.15), caixa(MURO, 3.8, 0.9, 0.1, 0, 0, 2.6));
   },
-  predio(g, n, r) {
+  predio(g, n, r, spec) {
     const cor = pick(CORES_PREDIO, r), h = n * 1.05, l = 3.4 + r() * 0.8;
-    g.add(caixa(pick(CORES_LOJA, r), l + 0.2, 1.2, l + 0.2), caixa(cor, l, h, l, 0, 1.2));
+    g.add(caixa(spec.cor ?? pick(CORES_LOJA, r), l + 0.2, 1.2, l + 0.2), caixa(cor, l, h, l, 0, 1.2));
+    if (spec.cor !== undefined) g.add(caixa(spec.cor, l + 0.15, 0.9, l + 0.15, 0, 1.2 + h - 0.9));
     for (let a = 0; a < n; a++) {
       g.add(caixa(matJanela, l * 0.82, 0.5, 0.06, 0, 1.55 + a * 1.05, l / 2 + 0.01), caixa(matJanela, 0.06, 0.5, l * 0.82, l / 2 + 0.01, 1.55 + a * 1.05, 0), caixa(matJanela, 0.06, 0.5, l * 0.82, -l / 2 - 0.01, 1.55 + a * 1.05, 0));
       if (a % 2 === 0) g.add(caixa(CONCRETO, 1, 0.08, 0.5, -l * 0.2, 1.3 + a * 1.05, l / 2 + 0.25));
     }
     g.add(caixa(CONCRETO, l + 0.2, 0.25, l + 0.2, 0, 1.2 + h), caixa(0x8a8a90, 1.1, 0.8, 1.1, 0.6, 1.45 + h, -0.5), cilindro(0x3f7fd0, 0.4, 0.6, -0.8, 1.45 + h, 0.6));
   },
-  comercio(g, n, r) {
-    const c = pick(CORES_LOJA, r);
+  comercio(g, n, r, spec) {
+    const c = spec.cor ?? pick(CORES_LOJA, r);
     g.add(caixa(0xf2ede0, 3.6, 2.2, 3), caixa(c, 3.7, 0.6, 0.15, 0, 2.2, 1.5), caixa(c, 3.6, 0.08, 1, 0, 1.75, 2), caixa(matJanela, 1.6, 1.2, 0.06, 0.7, 0.2, 1.51), caixa(0x8a8a90, 0.9, 1.5, 0.08, -1, 0, 1.51));
     g.add(caixa(CONCRETO, 3.8, 0.15, 3.2, 0, 2.8), caixa(0x8a8a90, 0.8, 0.5, 0.8, -1, 2.95, -0.5));
+    // Loja de uma das três marcas: totem alto na cor da rede, para achar de longe.
+    if (spec.cor !== undefined) g.add(cilindro(0xe9e4d8, 0.09, 6.5, 2.3, 0, 2), caixa(c, 1.6, 1.1, 0.25, 2.3, 6.5, 2), caixa(0xffffff, 1.2, 0.3, 0.28, 2.3, 6.9, 2));
   },
-  galpao(g, n, r) {
+  galpao(g, n, r, spec) {
     const teto = cilindro(0x9aa3ad, 2.2, 6.4, 0, 0, 0);
     teto.rotation.z = Math.PI / 2; teto.position.set(0, 2.4, 0); teto.scale.y = 0.45;
-    g.add(caixa(pick([0xd9dde2, 0xcfd6c9, 0xe0d6c4], r), 6.4, 2.4, 4.4), teto, caixa(0x4a6fa5, 1.8, 1.9, 0.08, -1.4, 0, 2.21), caixa(0x3a3a40, 6.4, 0.3, 0.06, 0, 2.1, 2.22));
+    g.add(caixa(pick([0xd9dde2, 0xcfd6c9, 0xe0d6c4], r), 6.4, 2.4, 4.4), teto, caixa(0x4a6fa5, 1.8, 1.9, 0.08, -1.4, 0, 2.21), caixa(spec.cor ?? 0x3a3a40, 6.4, spec.cor !== undefined ? 0.7 : 0.3, 0.06, 0, 1.7, 2.22));
     g.add(cilindro(0xc9ced6, 0.3, 4.2, 2.6, 0, -1.4), caixa(0xf2f2f2, 2.2, 1.1, 1, 2, 0.3, 3.4), caixa(0x3f7fd0, 0.7, 0.9, 1, 3.4, 0.3, 3.4));
     if (n > 1) g.add(caixa(0xd9dde2, 3, 1.8, 2.4, -5, 0, -0.8));
   },
@@ -107,7 +110,9 @@ const M = {
 export function criarPredioBR(spec) {
   const r = aleatorio(spec.id * 7919 + 31);
   const g = new THREE.Group();
-  (M[spec.tipo] || M.casa)(g, spec.nivel || 1, r);
+  // Em lote de marca, o nível vem multiplicado por 100 (ver cidadeDosCEOs).
+  const nivel = spec.cor !== undefined ? Math.floor(spec.nivel / 100) : spec.nivel || 1;
+  (M[spec.tipo] || M.casa)(g, nivel, r, spec);
   const raiz = new THREE.Group();
   raiz.add(g);
   fundir(raiz);
