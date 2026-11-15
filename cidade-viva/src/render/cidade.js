@@ -28,6 +28,7 @@ export function criarCidade(scene, mundo3d) {
 
   function sincronizar(w, tempo, imediato = false) {
     const lista = desejados(w);
+    const novos = [];
     const chaves = new Map(lista.map((s) => [s.chave, s]));
     for (const [chave, p] of predios) {
       const s = chaves.get(chave);
@@ -47,6 +48,7 @@ export function criarCidade(scene, mundo3d) {
       grupo.add(obj);
       predios.set(s.chave, { obj, spec: s, nasc: imediato ? -10 : tempo });
       mundo3d.limparArea(s.pos.x, s.pos.z, s.classe === 'casa' ? 4.2 : 7.5);
+      if (!imediato) novos.push(s);
       sujo = 1;
     }
     if (eraPraca !== w.era) {
@@ -68,6 +70,7 @@ export function criarCidade(scene, mundo3d) {
     const temEstrada = w.estado.predios.some((p) => p.tipo === 'estrada');
     if (temEstrada !== calcada) { calcada = temEstrada; sujo = 1; }
     if (imediato) repintar();
+    return novos;
   }
 
   function repintar() {
@@ -131,6 +134,25 @@ function figura(r, dono) {
   return g;
 }
 
+// Balõezinhos de emoji sobre a cabeça dos moradores.
+const texturas = new Map();
+function texturaEmoji(e) {
+  if (!texturas.has(e)) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 96;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(255,250,235,.95)';
+    g.beginPath(); g.arc(48, 44, 40, 0, 6.3); g.fill();
+    g.beginPath(); g.moveTo(36, 78); g.lineTo(48, 96); g.lineTo(60, 78); g.fill();
+    g.font = '50px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(e, 48, 47);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    texturas.set(e, t);
+  }
+  return texturas.get(e);
+}
+
 export function criarMoradores(scene) {
   const grupo = new THREE.Group();
   scene.add(grupo);
@@ -153,6 +175,7 @@ export function criarMoradores(scene) {
         const r = aleatorio(f.id * 31 + k.length + (k.endsWith('-1') ? 7 : 0));
         m = { g: figura(r, dono), dono, fase: r() * 6.28, vel: 1.3 + r() * 0.8, espera: r() * 4, alvo: null, r };
         m.g.position.set(f.pos.x, 0, f.pos.z);
+        m.g.userData.info = { classe: 'casa', id: f.id };
         grupo.add(m.g);
         gente.set(k, m);
       }
@@ -170,8 +193,27 @@ export function criarMoradores(scene) {
     return { x: m.casa.x, z: m.casa.z + 1.8 };
   }
 
+  function emote(emoji, quantos = 6, familiaId = null) {
+    const acordados = [...gente.entries()].filter(([k, m]) => m.g.visible && !m.balao && (familiaId === null || k.startsWith(`${familiaId}-`)));
+    for (let i = 0; i < quantos && acordados.length; i++) {
+      const [, m] = acordados.splice(Math.floor(Math.random() * acordados.length), 1)[0];
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaEmoji(emoji), depthWrite: false, transparent: true }));
+      sp.position.y = 1.7;
+      m.g.add(sp);
+      m.balao = { sp, t: 0, dur: 3.2 + Math.random() * 1.5 };
+    }
+  }
+
   function atualizar(dt, tempo, noite) {
     for (const m of gente.values()) {
+      if (m.balao) {
+        const b = m.balao;
+        b.t += dt;
+        const s = Math.min(1, b.t * 5, (b.dur - b.t) * 4) * 1.15;
+        b.sp.scale.setScalar(Math.max(0.01, s));
+        b.sp.position.y = 1.7 + Math.sin(b.t * 3) * 0.06;
+        if (b.t >= b.dur || !m.g.visible) { m.g.remove(b.sp); b.sp.material.dispose(); m.balao = null; }
+      }
       const p = m.g.position;
       const dormir = noite > 0.75;
       if (dormir && !m.dormindo) { m.alvo = { x: m.casa.x, z: m.casa.z }; m.dormindo = true; }
@@ -195,7 +237,7 @@ export function criarMoradores(scene) {
     }
   }
 
-  return { sincronizar, atualizar };
+  return { grupo, sincronizar, atualizar, emote };
 }
 
 // Avatar do narrador, para descer e andar pela cidade.

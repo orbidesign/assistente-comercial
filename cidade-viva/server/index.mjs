@@ -8,7 +8,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TIPOS_EFEITO, ALVOS_EFEITO, NEGOCIOS, SERVICOS } from '../src/sim/dados.js';
 
 const PORTA = +process.env.PORT || 8787;
-const MODELO = process.env.CIDADE_MODELO || 'claude-opus-5-5';
+// Custo baixo por padrão: o modelo mais barato dá conta de traduzir um evento em
+// efeitos e de escolher ações em uma lista. CIDADE_MODELO troca o modelo.
+const MODELO = process.env.CIDADE_MODELO || 'claude-haiku-5-5';
+// Teto de gasto por execução do servidor, em dólares. Ao atingir, a IA desliga
+// e o jogo segue só com regras.
+const LIMITE = +process.env.CIDADE_LIMITE_USD || 0.5;
+// Dólares por milhão de tokens [entrada, saída].
+const PRECOS = { 'claude-haiku-5-5': [0.1, 0.5], 'claude-sonnet-5-5': [2, 10], 'claude-opus-5-5': [4, 20], 'claude-fable-5-2': [8, 40] };
+const conta = { gasto: 0, chamadas: 0, cache: 0 };
+const custo = () => ({ gasto: conta.gasto, limite: LIMITE, chamadas: conta.chamadas, modelo: MODELO });
+const memoria = new Map(); // narrações repetidas não pagam de novo
 const temCredencial = !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 const client = temCredencial ? new Anthropic() : null;
 const aqui = path.dirname(fileURLToPath(import.meta.url));
@@ -68,20 +78,29 @@ Use "nenhum" em "negocio" quando a ação não for investir.
 Se "estado" vier nulo, ainda não existe governo: devolva imposto_delta 0 e construir "nada", com fala vazia.
 Decida com base nos números recebidos, como alguém com interesses reais decidiria, e deixe os lados discordarem quando fizer sentido. Cada "fala" é uma frase curta, em primeira pessoa, com personalidade, explicando a decisão.`;
 
-async function pedir(sistema, usuario, esquema, esforco) {
+async function pedir(sistema, usuario, esquema) {
+  if (conta.gasto >= LIMITE) { const e = new Error('teto de gasto de IA atingido'); e.status = 429; throw e; }
   const corpo = {
-    model: MODELO, max_tokens: 8000, system: sistema,
-    output_config: { effort: esforco, format: { type: 'json_schema', schema: esquema } },
+    model: MODELO, max_tokens: 3000, system: sistema,
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: esquema } },
     messages: [{ role: 'user', content: usuario }],
   };
   let r;
-  try {
-    // Se o modelo principal recusar por política, a API refaz o pedido em um modelo reserva.
-    r = await client.beta.messages.create({ ...corpo, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
-  } catch (e) {
-    if (!(e instanceof Anthropic.BadRequestError)) throw e;
-    r = await client.messages.create(corpo);
+  if (MODELO.includes('haiku')) r = await client.messages.create(corpo);
+  else {
+    try {
+      // Nos modelos maiores, se houver recusa por política a API refaz o pedido em um modelo reserva.
+      r = await client.beta.messages.create({ ...corpo, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
+    } catch (e) {
+      if (!(e instanceof Anthropic.BadRequestError)) throw e;
+      r = await client.messages.create(corpo);
+    }
   }
+  const [pe, ps] = PRECOS[MODELO] || PRECOS['claude-opus-5-5'];
+  const u = r.usage || {};
+  const entrada = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+  conta.gasto += (entrada * pe + (u.output_tokens || 0) * ps) / 1e6;
+  conta.chamadas++;
   if (r.stop_reason === 'refusal') throw new Error('o modelo recusou o pedido');
   if (r.stop_reason === 'max_tokens') throw new Error('resposta cortada por limite de tokens');
   const texto = r.content.find((b) => b.type === 'text');
@@ -106,7 +125,7 @@ const TIPOS = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 
 const servidor = http.createServer(async (req, res) => {
   try {
-    if (req.url === '/api/status') return responder(res, 200, { ia: !!client, modelo: client ? MODELO : null });
+    if (req.url === '/api/status') return responder(res, 200, { ia: !!client && conta.gasto < LIMITE, ...custo() });
     if (req.method === 'POST' && (req.url === '/api/evento' || req.url === '/api/conselho')) {
       if (!client) return responder(res, 503, { erro: 'IA não configurada' });
       const corpo = await lerCorpo(req);
@@ -114,9 +133,15 @@ const servidor = http.createServer(async (req, res) => {
         const texto = String(corpo.texto || '').slice(0, 1200);
         if (!texto.trim()) return responder(res, 400, { erro: 'texto vazio' });
         const usuario = `Estado atual da cidade:\n${JSON.stringify(corpo.resumo || {})}\n\nSituação descrita pelo narrador:\n${texto}`;
-        return responder(res, 200, await pedir(SISTEMA_EVENTO, usuario, ESQUEMA_EVENTO, 'low'));
+        const chave = texto.trim().toLowerCase();
+        if (!memoria.has(chave)) {
+          if (memoria.size > 300) memoria.clear();
+          memoria.set(chave, await pedir(SISTEMA_EVENTO, usuario, ESQUEMA_EVENTO));
+        } else conta.cache++;
+        return responder(res, 200, { ...memoria.get(chave), custo: custo() });
       }
-      return responder(res, 200, await pedir(SISTEMA_CONSELHO, `Situação da cidade neste ano:\n${JSON.stringify(corpo.resumo || {})}`, ESQUEMA_CONSELHO, 'medium'));
+      const d = await pedir(SISTEMA_CONSELHO, `Situação da cidade:\n${JSON.stringify(corpo.resumo || {})}`, ESQUEMA_CONSELHO);
+      return responder(res, 200, { ...d, custo: custo() });
     }
     // Depois de `npm run build`, o mesmo servidor entrega o jogo pronto.
     const dist = path.join(aqui, '..', 'dist');
@@ -127,15 +152,15 @@ const servidor = http.createServer(async (req, res) => {
     }
     responder(res, 404, { erro: 'não encontrado' });
   } catch (e) {
-    let status = 500;
+    let status = e.status === 429 ? 429 : 500;
     if (e instanceof Anthropic.RateLimitError) status = 429;
     else if (e instanceof Anthropic.AuthenticationError) status = 401;
     else if (e instanceof Anthropic.APIError) status = 502;
     console.error('[servidor]', e.message);
-    responder(res, status, { erro: e.message });
+    responder(res, status, { erro: e.message, custo: custo() });
   }
 });
 
 servidor.listen(PORTA, () => {
-  console.log(`Cidade Viva: servidor em http://localhost:${PORTA} — IA ${client ? `ativa (${MODELO})` : 'desligada (defina ANTHROPIC_API_KEY para ligar)'}`);
+  console.log(`Cidade Viva: servidor em http://localhost:${PORTA} — IA ${client ? `ativa (${MODELO}, teto de US$ ${LIMITE.toFixed(2)})` : 'desligada (defina ANTHROPIC_API_KEY para ligar)'}`);
 });

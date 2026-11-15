@@ -437,7 +437,7 @@ export function necessidadesDoEstado(w) {
 
 function cicloAnual(w) {
   const e = w.estado;
-  if (e.existe && !w.ia) {
+  if (e.existe) {
     if (e.tesouro < 0 && e.taxa < 0.24 && (e.arrecadado || 0) > 0) { e.taxa = lim(e.taxa + 0.02, 0, 0.4); registrar(w, `Cofres vazios: o conselho sobe os impostos para ${Math.round(e.taxa * 100)}%.`, 'estado'); }
     else if (e.tesouro >= 0) {
       const falta = necessidadesDoEstado(w);
@@ -598,7 +598,8 @@ export function aplicarDecisoes(w, d) {
 }
 
 // Resumo compacto do mundo, enviado aos agentes de IA.
-export function resumoParaIA(w) {
+// `curto` manda só o contexto geral (para interpretar eventos gasta-se menos).
+export function resumoParaIA(w, curto = false) {
   const i = w.ind;
   const p2 = (v) => +v.toFixed(2);
   return {
@@ -606,17 +607,19 @@ export function resumoParaIA(w) {
     populacao: i.populacao, familias: i.familias, felicidade: p2(i.felicidade), saude: p2(i.saude),
     educacao: p2(i.educacao), desigualdade_gini: p2(i.gini), seguranca: p2(w.seguranca),
     salario_medio: p2(i.salario), precos: Object.fromEntries(Object.entries(w.precos).map(([k, v]) => [k, p2(v)])),
-    estado: w.estado.existe ? {
+    estado: !w.estado.existe ? null : curto ? { imposto: p2(w.estado.taxa), legitimidade: p2(w.estado.legitimidade) } : {
       imposto: p2(w.estado.taxa), tesouro: Math.round(w.estado.tesouro), arrecadacao_mensal: Math.round(w.estado.arrecadado || 0),
       legitimidade: p2(w.estado.legitimidade), servicos: w.estado.predios.map((p) => p.tipo),
       pode_construir: Object.entries(SERVICOS).filter(([t, s]) => s.era <= w.era && !temServico(w, t)).map(([t, s]) => ({ tipo: t, custo: s.custo })),
-    } : null,
+    },
+    ...(curto ? {} : {
     negocios_possiveis: Object.entries(NEGOCIOS).filter(([, n]) => n.era <= w.era).map(([t, n]) => ({ tipo: t, custo: n.custo, produz: n.produz })),
     empresarios: [...w.familias].sort((a, b) => b.riqueza - a.riqueza).slice(0, 3).map((f) => {
       const n = negociosDe(w, f)[0] || null;
       return { familia: f.id, nome: f.nome, riqueza: Math.round(f.riqueza), negocios: f.dono,
         negocio: n ? { tipo: n.tipo, nivel: n.nivel, lucro_mensal: Math.round(n.lucro), salario: p2(n.salario), funcionarios: n.funcionarios.length } : null };
     }),
-    ultimos_fatos: w.log.slice(-6).map((l) => l.texto),
+    ultimos_fatos: w.log.slice(-5).map((l) => l.texto),
+    }),
   };
 }

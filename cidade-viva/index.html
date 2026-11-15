@@ -2,140 +2,220 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#3b2a1a" />
   <title>Cidade Viva</title>
   <style>
     :root {
       --papel: #f6ecd2; --papel2: #eadbb6; --tinta: #3b2a1a; --tinta2: #7a6248; --borda: #b6935a;
       --estado: #3f6aa8; --negocio: #b5523b; --bom: #4f9a3c; --ruim: #b23a3a; --ouro: #d9a13a;
+      --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+      --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px);
+      --m: 8px; --doca: 150px;
     }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1533; color: var(--tinta);
-      font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-size: 14px; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1533; color: var(--tinta); overscroll-behavior: none;
+      font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-size: 14px;
+      -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     canvas#cena { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    #vinheta { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(20, 12, 30, .34) 100%); }
+
     .painel { position: fixed; background: linear-gradient(180deg, var(--papel), var(--papel2)); border: 2px solid var(--borda);
-      border-radius: 10px; box-shadow: 0 3px 0 #8a6a3a, 0 8px 22px rgba(0, 0, 0, .35); }
+      border-radius: 12px; box-shadow: 0 3px 0 #8a6a3a, 0 8px 22px rgba(0, 0, 0, .35); transition: opacity .4s, transform .35s; }
     button { font: inherit; color: var(--tinta); cursor: pointer; background: #fff7e2; border: 1.5px solid var(--borda);
-      border-radius: 7px; padding: 4px 9px; }
-    button:hover { background: #fff; }
+      border-radius: 9px; padding: 6px 10px; touch-action: manipulation; }
+    button:active { transform: scale(.95); }
     button.ativo { background: var(--ouro); border-color: #8a6a3a; color: #fff; }
 
-    #topo { top: 12px; left: 12px; padding: 10px 14px; width: 268px; }
-    #topo h1 { margin: 0; font-size: 21px; letter-spacing: .3px; }
-    #era { display: inline-block; margin-top: 3px; padding: 1px 9px; border-radius: 20px; background: var(--tinta); color: var(--papel); font-size: 12px; }
-    #data { color: var(--tinta2); margin-left: 6px; font-style: italic; }
-    #velocidade { display: flex; gap: 5px; margin-top: 9px; }
-    #velocidade button { flex: 1; padding: 3px 0; }
-    #grafico { width: 100%; height: 34px; margin-top: 8px; display: block; }
-    #ia { margin-top: 6px; font-size: 12px; color: var(--tinta2); }
-    #ia b { color: var(--bom); } #ia.off b { color: var(--tinta2); }
+    /* topo */
+    #topo { top: calc(var(--m) + var(--st)); left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); padding: 7px 10px;
+      display: flex; align-items: center; gap: 8px; }
+    #topo .nome { flex: 1; min-width: 0; }
+    #topo h1 { margin: 0; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #era { display: inline-block; padding: 1px 8px; border-radius: 20px; background: var(--tinta); color: var(--papel); font-size: 11px; }
+    #data { color: var(--tinta2); margin-left: 5px; font-style: italic; font-size: 12px; }
+    #velocidade { display: flex; gap: 4px; }
+    #velocidade button { min-width: 40px; height: 38px; padding: 0 6px; font-size: 13px; }
+    #grafico { display: none; }
 
-    #indicadores { top: 12px; left: 292px; right: 322px; padding: 7px 9px; display: flex; flex-wrap: wrap; gap: 5px 7px; align-items: center; }
-    .chip { display: flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 20px; background: rgba(255, 255, 255, .55); white-space: nowrap; }
+    #ind { top: calc(var(--m) + var(--st) + 66px); left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); padding: 5px 6px;
+      display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    #ind::-webkit-scrollbar, #cartas::-webkit-scrollbar { display: none; }
+    .chip { flex: 0 0 auto; display: flex; align-items: baseline; gap: 4px; padding: 3px 8px; border-radius: 20px; background: rgba(255, 255, 255, .55); white-space: nowrap; }
     .chip small { color: var(--tinta2); font-size: 11px; }
-    .chip b { font-size: 14px; }
-    #tensao { flex: 1 1 210px; min-width: 190px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    #tensao { flex: 0 0 230px; display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 0 4px; }
     #tensao .barra { flex: 1; height: 9px; border-radius: 9px; background: linear-gradient(90deg, var(--estado), #cfc4a8 50%, var(--negocio)); position: relative; }
     #tensao .marca { position: absolute; top: -4px; width: 5px; height: 17px; border-radius: 3px; background: var(--tinta); transform: translateX(-50%); transition: left .6s; }
 
-    #cronica { top: 12px; right: 12px; width: 298px; max-height: 46vh; display: flex; flex-direction: column; }
-    #cronica h2, #inspetor h2 { margin: 0; padding: 7px 12px; font-size: 15px; border-bottom: 1.5px solid var(--borda); }
-    #log { overflow-y: auto; padding: 6px 10px 8px; }
-    #log p { margin: 0 0 6px; padding-left: 8px; border-left: 3px solid #cbb78a; line-height: 1.3; }
+    /* botões flutuantes */
+    #botoes { position: fixed; right: calc(var(--m) + var(--sr)); top: calc(var(--st) + 122px); display: flex; flex-direction: column; gap: 8px; transition: opacity .4s; }
+    #botoes button { width: 48px; height: 48px; border-radius: 50%; font-size: 21px; padding: 0; border-width: 2px;
+      box-shadow: 0 3px 0 #8a6a3a, 0 5px 12px rgba(0, 0, 0, .3); background: var(--papel); }
+    #botoes button.ativo { background: var(--ouro); }
+
+    /* avisos que sobem na tela */
+    #toasts { position: fixed; left: calc(var(--m) + var(--sl)); top: calc(var(--st) + 122px); width: min(300px, calc(100vw - 80px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+    .toast { padding: 6px 10px; border-radius: 9px; background: rgba(59, 42, 26, .88); color: #fff3d6; line-height: 1.25; font-size: 13px;
+      border-left: 4px solid #cbb78a; animation: entra .35s ease-out, some .6s ease-in 5.2s forwards; }
+    .toast.estado { border-color: #7fa8e8; } .toast.negocio { border-color: #e8876f; } .toast.ruim { border-color: #ff6b6b; }
+    .toast.era { border-color: var(--ouro); font-weight: bold; } .toast.evento { border-color: #b99cf2; }
+    @keyframes entra { from { opacity: 0; transform: translateX(-24px); } }
+    @keyframes some { to { opacity: 0; transform: translateY(-8px); } }
+
+    /* rótulos que flutuam sobre a cena */
+    .rotulo { position: fixed; left: 0; top: 0; pointer-events: none; padding: 2px 9px; border-radius: 20px; white-space: nowrap; font-size: 13px;
+      background: rgba(255, 247, 226, .94); border: 1.5px solid var(--borda); box-shadow: 0 2px 8px rgba(0, 0, 0, .3); will-change: transform, opacity; }
+
+    /* crônica: gaveta no celular, painel fixo no desktop */
+    #cronica { top: calc(var(--m) + var(--st)); bottom: calc(var(--m) + var(--sb)); right: calc(var(--m) + var(--sr)); width: min(340px, 86vw);
+      display: flex; flex-direction: column; transform: translateX(calc(100% + 30px)); z-index: 5; }
+    #cronica.aberta { transform: none; }
+    #cronica header, #inspetor header { display: flex; align-items: center; padding: 8px 12px; border-bottom: 1.5px solid var(--borda); }
+    #cronica h2, #inspetor h2 { margin: 0; font-size: 16px; flex: 1; }
+    #log { overflow-y: auto; padding: 8px 10px; flex: 1; -webkit-overflow-scrolling: touch; }
+    #log p { margin: 0 0 7px; padding-left: 8px; border-left: 3px solid #cbb78a; line-height: 1.3; }
     #log p small { color: var(--tinta2); display: block; font-size: 11px; }
     #log p.estado { border-color: var(--estado); } #log p.negocio { border-color: var(--negocio); }
     #log p.ruim { border-color: var(--ruim); } #log p.era { border-color: var(--ouro); font-weight: bold; }
     #log p.evento { border-color: #8a5fc9; background: rgba(138, 95, 201, .09); }
+    #cronica footer { padding: 8px 10px; border-top: 1.5px solid var(--borda); font-size: 12px; color: var(--tinta2); display: flex; gap: 8px; align-items: center; }
+    #ia { flex: 1; line-height: 1.3; } #ia b { color: var(--bom); } #ia.off b { color: var(--tinta2); }
+    .fechar { width: 34px; height: 34px; padding: 0; border-radius: 50%; font-size: 18px; }
 
-    #inspetor { right: 12px; bottom: 12px; width: 298px; display: none; }
+    /* inspetor */
+    /* no celular o inspetor ocupa o lugar da doca, para nunca cobrir os botões nem a cidade */
+    #inspetor { left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); bottom: calc(var(--m) + var(--sb)); display: none; z-index: 6; max-width: 460px; margin: 0 auto; }
     #inspetor .corpo { padding: 8px 12px 10px; line-height: 1.5; }
     #inspetor .corpo span { color: var(--tinta2); }
-    #inspetor button { position: absolute; top: 5px; right: 6px; padding: 0 7px; }
     .medidor { height: 7px; border-radius: 7px; background: #d8c9a2; overflow: hidden; margin: 1px 0 5px; }
     .medidor i { display: block; height: 100%; background: var(--bom); }
+    #insp-ir { margin-right: 6px; padding: 4px 10px; }
 
-    #narrador { left: 50%; bottom: 12px; transform: translateX(-50%); width: min(760px, calc(100vw - 660px)); min-width: 420px; padding: 8px 10px; }
-    #narrador .titulo { font-size: 12px; color: var(--tinta2); margin-bottom: 5px; display: flex; justify-content: space-between; }
-    #cartas { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
-    .carta { flex: 0 0 auto; width: 84px; padding: 5px 4px; text-align: center; line-height: 1.15; font-size: 12px; border-radius: 8px;
+    /* doca do narrador */
+    #doca { left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); bottom: calc(var(--m) + var(--sb)); padding: 6px 8px 8px; z-index: 4; }
+    #doca .alca { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--tinta2); margin-bottom: 5px; }
+    #doca .alca span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #recolher { padding: 2px 12px; height: 28px; }
+    #doca.recolhida #cartas, #doca.recolhida #narrar, #doca.recolhida #previa, #doca.recolhida #aviso { display: none; }
+    #doca.recolhida .alca { margin: 0; }
+    #cartas { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .carta { flex: 0 0 auto; width: 76px; height: 66px; padding: 4px 3px; text-align: center; line-height: 1.1; font-size: 11.5px; border-radius: 9px;
       background: linear-gradient(180deg, #fffaf0, #f1e2bd); }
-    .carta span { display: block; font-size: 22px; }
-    .carta:hover { transform: translateY(-3px); }
-    #narrar { display: flex; gap: 6px; margin-top: 2px; }
-    #narrar input { flex: 1; font: inherit; padding: 6px 10px; border: 1.5px solid var(--borda); border-radius: 7px; background: #fffdf5; color: var(--tinta); min-width: 0; }
-    #aviso { font-size: 12px; color: var(--tinta2); min-height: 16px; margin-top: 3px; }
+    .carta span { display: block; font-size: 23px; line-height: 1.2; }
+    .carta.escolhida { border-color: var(--tinta); box-shadow: 0 0 0 2px var(--ouro); transform: translateY(-2px); }
+    #previa { display: none; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 6px; border-radius: 9px; background: rgba(255, 255, 255, .6); line-height: 1.25; }
+    #previa.visivel { display: flex; }
+    #previa div { flex: 1; } #previa b { display: block; }
+    #jogar { background: var(--ouro); color: #fff; border-color: #8a6a3a; font-weight: bold; padding: 9px 14px; }
+    #narrar { display: flex; gap: 6px; }
+    #narrar input { flex: 1; font: inherit; font-size: 16px; padding: 8px 10px; border: 1.5px solid var(--borda); border-radius: 9px; background: #fffdf5; color: var(--tinta);
+      min-width: 0; -webkit-user-select: text; user-select: text; }
+    #narrar button { padding: 0 14px; }
+    #aviso { font-size: 12px; color: var(--tinta2); margin-top: 4px; }
+    #aviso:empty { display: none; }
 
-    #acoes { left: 12px; bottom: 12px; padding: 7px 9px; display: flex; flex-direction: column; gap: 5px; width: 268px; }
-    #acoes .linha { display: flex; gap: 5px; } #acoes .linha button { flex: 1; }
-    #acoes small { color: var(--tinta2); line-height: 1.3; }
+    /* alavanca para andar no toque */
+    #joy { position: fixed; left: calc(18px + var(--sl)); bottom: calc(var(--doca) + 30px + var(--sb)); width: 112px; height: 112px; border-radius: 50%;
+      background: rgba(246, 236, 210, .45); border: 2px solid rgba(182, 147, 90, .9); display: none; touch-action: none; z-index: 3; }
+    #joy i { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px; border-radius: 50%; background: var(--papel); border: 2px solid var(--borda); box-shadow: 0 3px 8px rgba(0, 0, 0, .3); }
+    body.andando.toque #joy { display: block; }
 
-    #faixa { position: fixed; left: 0; right: 0; top: 34%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .8s; }
+    #faixa { position: fixed; left: 0; right: 0; top: 32%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .8s; z-index: 6; }
     #faixa.visivel { opacity: 1; }
-    #faixa div { display: inline-block; padding: 14px 46px; background: rgba(59, 42, 26, .86); color: #ffe9b0; border-top: 3px solid var(--ouro); border-bottom: 3px solid var(--ouro); }
+    #faixa div { display: inline-block; padding: 12px 40px; background: rgba(59, 42, 26, .88); color: #ffe9b0; border-top: 3px solid var(--ouro); border-bottom: 3px solid var(--ouro); }
     #faixa small { display: block; letter-spacing: 4px; font-size: 12px; text-transform: uppercase; opacity: .8; }
-    #faixa b { font-size: 34px; letter-spacing: 1px; }
+    #faixa b { font-size: clamp(24px, 6vw, 36px); letter-spacing: 1px; }
 
-    @media (max-width: 1100px) {
-      #indicadores { left: 12px; right: 12px; top: auto; bottom: 188px; font-size: 12px; }
-      #cronica { max-height: 28vh; width: 250px; }
-      #narrador { width: calc(100vw - 24px); min-width: 0; }
-      #acoes { bottom: auto; top: 200px; width: 150px; } #acoes small { display: none; }
-      #inspetor { bottom: 300px; }
+    /* modo cinema: só a cidade, os avisos e um botão para sair */
+    body.cinema #topo, body.cinema #ind, body.cinema #doca, body.cinema #inspetor, body.cinema #joy { opacity: 0; pointer-events: none; }
+    body.cinema #botoes button:not(#b-cinema) { display: none; }
+    body.cinema #toasts { top: calc(var(--st) + 14px); }
+    body.cinema #vinheta { background: radial-gradient(ellipse at center, transparent 45%, rgba(10, 6, 20, .6) 100%); }
+
+    @media (max-width: 999px) { #doca.recolhida { right: auto; } }
+    /* telas largas: tablet deitado e desktop */
+    @media (min-width: 1000px) {
+      :root { --m: 12px; }
+      #topo { right: auto; width: 330px; flex-wrap: wrap; padding: 10px 12px; }
+      #topo h1 { font-size: 20px; }
+      #topo .nome { flex: 1 1 100%; }
+      #velocidade { flex: 1; } #velocidade button { flex: 1; height: 32px; }
+      #grafico { display: block; width: 100%; height: 30px; }
+      #ind { top: calc(var(--m) + var(--st)); left: calc(354px + var(--sl)); right: calc(346px + var(--sr)); flex-wrap: wrap; overflow: visible; }
+      #tensao { flex: 1 1 230px; }
+      #cronica { transform: none; bottom: auto; width: 322px; max-height: 46vh; }
+      #cronica .fechar, #b-cronica { display: none; }
+      #botoes { top: auto; right: auto; left: calc(var(--m) + var(--sl)); bottom: calc(var(--m) + var(--sb)); flex-direction: row; }
+      #toasts { top: calc(var(--st) + 150px); }
+      #doca { left: 50%; right: auto; width: min(760px, calc(100vw - 420px)); transform: translateX(-50%); }
+      #inspetor { left: auto; right: calc(var(--m) + var(--sr)); bottom: calc(var(--m) + var(--sb)); width: 322px; margin: 0; }
+      .carta { width: 84px; }
+      body.cinema #cronica { opacity: 0; pointer-events: none; }
     }
-    @media (max-width: 640px) {
-      #topo { width: 190px; padding: 7px 9px; } #topo h1 { font-size: 16px; } #grafico, #ia { display: none; }
-      #cronica { width: calc(100vw - 226px); max-height: 150px; font-size: 12px; }
-      #acoes { top: 150px; }
+    /* celular deitado: pouca altura, então a doca fica compacta */
+    @media (max-height: 480px) {
+      #ind { display: none; }
+      .carta { height: 52px; width: 68px; } .carta span { font-size: 18px; }
+      #doca .alca span { display: none; }
+      #botoes { top: calc(var(--st) + 64px); flex-direction: row; }
+      #toasts { top: calc(var(--st) + 64px); }
     }
   </style>
 </head>
 <body>
   <canvas id="cena"></canvas>
+  <div id="vinheta"></div>
 
   <section id="topo" class="painel">
-    <h1 id="nome">…</h1>
-    <span id="era"></span><span id="data"></span>
+    <div class="nome">
+      <h1 id="nome">…</h1>
+      <span id="era"></span><span id="data"></span>
+    </div>
     <div id="velocidade">
-      <button data-v="0" title="Pausar (espaço)">⏸</button>
-      <button data-v="1" title="1 mês a cada 4 segundos">▶</button>
-      <button data-v="3">▶▶</button>
-      <button data-v="12">▶▶▶</button>
+      <button data-v="0" aria-label="Pausar">⏸</button>
+      <button data-v="1" aria-label="Velocidade normal">▶</button>
+      <button data-v="3" aria-label="Rápido">▶▶</button>
+      <button data-v="12" aria-label="Muito rápido">▶▶▶</button>
     </div>
     <canvas id="grafico" title="População ao longo dos anos"></canvas>
-    <div id="ia"></div>
   </section>
 
-  <section id="indicadores" class="painel"></section>
+  <section id="ind" class="painel"></section>
+  <div id="toasts"></div>
+  <div id="rotulos"></div>
+
+  <div id="botoes">
+    <button id="b-cronica" aria-label="Crônica da cidade">📜</button>
+    <button id="b-cinema" aria-label="Modo cinema: só assistir">🎬</button>
+    <button id="b-andar" aria-label="Descer e andar pela cidade">🚶</button>
+    <button id="b-foto" aria-label="Mudar a hora do dia">🌗</button>
+  </div>
 
   <section id="cronica" class="painel">
-    <h2>Crônica da cidade</h2>
+    <header><h2>Crônica da cidade</h2><button class="fechar" id="c-fechar" aria-label="Fechar">×</button></header>
     <div id="log"></div>
+    <footer><div id="ia"></div><button id="novo">🌱 Novo vale</button></footer>
   </section>
 
   <section id="inspetor" class="painel">
-    <h2 id="insp-titulo"></h2>
-    <button id="insp-fechar">×</button>
+    <header><h2 id="insp-titulo"></h2><button id="insp-ir">Ir até lá</button><button class="fechar" id="insp-fechar" aria-label="Fechar">×</button></header>
     <div class="corpo" id="insp-corpo"></div>
   </section>
 
-  <section id="narrador" class="painel">
-    <div class="titulo"><span>Você é o narrador. Jogue uma carta ou descreva o que acontece.</span></div>
+  <section id="doca" class="painel">
+    <div class="alca"><span>Você é o narrador: jogue uma carta ou conte o que acontece.</span><button id="recolher" aria-label="Recolher">▾</button></div>
+    <div id="previa"><div><b id="previa-titulo"></b><span id="previa-texto"></span></div><button id="jogar">Jogar</button></div>
     <div id="cartas"></div>
     <form id="narrar">
-      <input id="texto" maxlength="600" autocomplete="off" placeholder="Ex.: um forasteiro rico chega querendo abrir um banco…" />
+      <input id="texto" maxlength="600" autocomplete="off" enterkeyhint="send" placeholder="Um forasteiro rico chega querendo abrir um banco…" />
       <button type="submit">Narrar</button>
     </form>
     <div id="aviso"></div>
   </section>
 
-  <section id="acoes" class="painel">
-    <div class="linha">
-      <button id="andar" title="Descer e andar pela cidade (V)">🚶 Andar</button>
-      <button id="novo" title="Começar outra cidade">🌱 Novo vale</button>
-    </div>
-    <small>Arraste para girar · roda para zoom · botão direito move · clique em um prédio para ver quem mora lá · no modo andar, use WASD.</small>
-  </section>
-
+  <div id="joy"><i></i></div>
   <div id="faixa"><div><small>Nova era</small><b id="faixa-texto"></b></div></div>
 
   <script type="module" src="/src/main.js"></script>

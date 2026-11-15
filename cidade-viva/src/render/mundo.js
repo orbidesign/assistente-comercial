@@ -1,7 +1,7 @@
 // O vale: terreno, rio, céu, ciclo de dia e noite, estações, vegetação, nuvens e pássaros.
 import * as THREE from 'three';
 import { altura, fbm, rioX, RAIO_MUNDO, NIVEL_AGUA } from '../sim/geo.js';
-import { toon, matJanela, aleatorio } from './base.js';
+import { toon, matJanela, aleatorio, texturaPonto } from './base.js';
 
 const C = (h) => new THREE.Color(h);
 const CORES = {
@@ -25,7 +25,7 @@ const CEU = [
 const FOLHA = [0x47a53c, 0x4aa53a, 0x6fa83a, 0xb8a13a, 0xd98a2f, 0xc97a3c, 0x9fb59a, 0x8fb7a0, 0x7cc46a, 0x62c452, 0x55b845, 0x4fae3f].map(C);
 const CHAO = [0xffffff, 0xfffbe6, 0xfff2cc, 0xf6e2b6, 0xf0d6a8, 0xe9dfcf, 0xe6ecf0, 0xe3ece6, 0xf2ffe6, 0xffffff, 0xffffff, 0xffffff].map(C);
 
-export function criarMundo3D(scene) {
+export function criarMundo3D(scene, q = { arvores: 1700, tufos: 6500, sombra: 2048, particulas: 1400 }) {
   const tmp = new THREE.Color();
   const rng = aleatorio(4242);
 
@@ -79,16 +79,31 @@ export function criarMundo3D(scene) {
   }
 
   // ----- rio -----
+  // Um mapa de profundidade do vale deixa a água rasa mais clara e desenha
+  // espuma onde ela encosta na margem.
+  const RES = 256, fundura = new Uint8Array(RES * RES);
+  for (let j = 0; j < RES; j++) for (let i = 0; i < RES; i++) {
+    const x = (i / (RES - 1) - 0.5) * LADO, z = (j / (RES - 1) - 0.5) * LADO;
+    fundura[j * RES + i] = Math.max(0, Math.min(255, ((NIVEL_AGUA - altura(x, z)) / 1.3) * 255));
+  }
+  const mapaFundo = new THREE.DataTexture(fundura, RES, RES, THREE.RedFormat);
+  mapaFundo.minFilter = mapaFundo.magFilter = THREE.LinearFilter;
+  mapaFundo.needsUpdate = true;
   const matAgua = new THREE.ShaderMaterial({
     transparent: true,
-    uniforms: { t: { value: 0 }, fundo: { value: C(0x3b8fd6) }, claro: { value: C(0x63b4ee) }, luz: { value: 1 } },
-    vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform float t; uniform float luz; uniform vec3 fundo; uniform vec3 claro; varying vec3 p;
+    uniforms: { t: { value: 0 }, mapa: { value: mapaFundo }, raso: { value: C(0x7fd6e8) }, fundo: { value: C(0x2f7fcf) }, luz: { value: 1 } },
+    vertexShader: `varying vec3 p; varying vec2 u;
+      void main(){ p = position; u = vec2(position.x, -position.y) / ${LADO.toFixed(1)} + 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform float t; uniform float luz; uniform sampler2D mapa; uniform vec3 raso; uniform vec3 fundo; varying vec3 p; varying vec2 u;
       void main(){
-        float a = sin(p.x * 0.9 + t * 0.7 + sin(p.y * 0.6 + t * 0.5) * 1.5) * sin(p.y * 1.3 - t * 1.6);
-        vec3 c = mix(fundo, claro, smoothstep(0.35, 0.6, a) * 0.8);
-        c = mix(c, vec3(1.0), step(0.965, a) * 0.85);
-        gl_FragColor = vec4(c * luz, 0.88);
+        float d = texture2D(mapa, u).r;
+        float onda = sin(p.x * 0.9 + t * 0.7 + sin(p.y * 0.6 + t * 0.5) * 1.5) * sin(p.y * 1.3 - t * 1.6);
+        vec3 c = mix(raso, fundo, smoothstep(0.05, 0.75, d));
+        c = mix(c, c * 1.18, smoothstep(0.4, 0.6, onda));
+        c = mix(c, vec3(1.0), step(0.97, onda) * 0.8);
+        float borda = d + sin(t * 1.4 + p.x * 0.7 + p.y * 0.5) * 0.035;
+        c = mix(c, vec3(1.0), (1.0 - smoothstep(0.1, 0.17, borda)) * 0.85);
+        gl_FragColor = vec4(c * luz, mix(0.72, 0.93, smoothstep(0.0, 0.6, d)));
       }`,
   });
   const agua = new THREE.Mesh(new THREE.PlaneGeometry(LADO, LADO), matAgua);
@@ -117,7 +132,7 @@ export function criarMundo3D(scene) {
 
   const sol = new THREE.DirectionalLight(0xfff4dd, 1.5);
   sol.castShadow = true;
-  sol.shadow.mapSize.set(2048, 2048);
+  sol.shadow.mapSize.set(q.sombra, q.sombra);
   Object.assign(sol.shadow.camera, { left: -95, right: 95, top: 95, bottom: -95, near: 10, far: 420 });
   sol.shadow.bias = -0.0006;
   sol.shadow.normalBias = 0.6;
@@ -132,8 +147,20 @@ export function criarMundo3D(scene) {
   const matFolha = toon(0x4fae3f, {});
   const matPinheiro = toon(0x2f7d4f, {});
   const matTronco = toon(0x7a5536);
+  const vento = { value: 0 };
+  const balancar = (mat, forca) => {
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.vento = vento;
+      sh.vertexShader = `uniform float vento;\n${sh.vertexShader}`.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>\n transformed.x += sin(vento + instanceMatrix[3].x * 0.4 + instanceMatrix[3].z * 0.3) * ${forca} * (position.y + 0.6);`,
+      );
+    };
+  };
+  balancar(matFolha, '0.07');
+  balancar(matPinheiro, '0.05');
   const arvores = [];
-  for (let k = 0; k < 9000 && arvores.length < 1700; k++) {
+  for (let k = 0; k < 9000 && arvores.length < q.arvores; k++) {
     const x = (rng() - 0.5) * LADO * 0.96, z = (rng() - 0.5) * LADO * 0.96;
     const h = altura(x, z), d = Math.hypot(x, z);
     if (h < 0.5 || h > 27 || d < 9) continue;
@@ -196,17 +223,10 @@ export function criarMundo3D(scene) {
 
   // Tufos de capim que balançam com o vento, flores e pedras.
   const matCapim = toon(0x8fd05a, {});
-  const vento = { value: 0 };
-  matCapim.onBeforeCompile = (sh) => {
-    sh.uniforms.vento = vento;
-    sh.vertexShader = `uniform float vento;\n${sh.vertexShader}`.replace(
-      '#include <begin_vertex>',
-      '#include <begin_vertex>\n transformed.x += sin(vento + instanceMatrix[3].x * 0.4 + instanceMatrix[3].z * 0.3) * 0.28 * position.y;',
-    );
-  };
+  balancar(matCapim, '0.3');
   const geoTufo = new THREE.ConeGeometry(0.22, 0.75, 4).translate(0, 0.37, 0);
   const listaTufos = [];
-  for (let k = 0; k < 30000 && listaTufos.length < 6500; k++) {
+  for (let k = 0; k < 30000 && listaTufos.length < q.tufos; k++) {
     const x = (rng() - 0.5) * 170, z = (rng() - 0.5) * 170;
     const h = altura(x, z);
     if (h < 0.5 || h > 14 || fbm(x * 0.2, z * 0.2) < 0.42) continue;
@@ -272,10 +292,46 @@ export function criarMundo3D(scene) {
     scene.add(ave);
   }
 
+  // ----- clima: folhas no outono, neve no inverno, pétalas na primavera, chuva nos eventos -----
+  const NP = q.particulas;
+  const pPos = new Float32Array(NP * 3), pFase = new Float32Array(NP);
+  for (let i = 0; i < NP; i++) { pPos.set([(rng() - 0.5) * 90, rng() * 34, (rng() - 0.5) * 90], i * 3); pFase[i] = rng() * 6.28; }
+  const geoClima = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const matClima = new THREE.PointsMaterial({ size: 0.3, map: texturaPonto(), transparent: true, opacity: 0.9, depthWrite: false });
+  const clima = new THREE.Points(geoClima, matClima);
+  clima.frustumCulled = false;
+  scene.add(clima);
+  const MODOS = {
+    folhas: { cor: 0xd98a2f, tam: 0.42, queda: 2.4, deriva: 1.6, qtd: 0.35 },
+    neve: { cor: 0xffffff, tam: 0.3, queda: 1.6, deriva: 0.8, qtd: 0.4 },
+    petalas: { cor: 0xffb7d0, tam: 0.34, queda: 1.1, deriva: 1.4, qtd: 0.3 },
+  };
+  const tempoRuim = { chuvaAte: 0, seca: 0, secaAlvo: 0 };
+  // A chuva é feita de riscos, não de pontos: lê muito melhor como chuva.
+  const NR = Math.floor(NP * 0.8), rPos = new Float32Array(NR * 6), rTopo = new Float32Array(NR * 3);
+  for (let i = 0; i < NR; i++) rTopo.set([(rng() - 0.5) * 80, rng() * 34, (rng() - 0.5) * 80], i * 3);
+  const chuva = new THREE.LineSegments(
+    new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(rPos, 3)),
+    new THREE.LineBasicMaterial({ color: 0xbfe0ff, transparent: true, opacity: 0.55, depthWrite: false }),
+  );
+  chuva.frustumCulled = false;
+  chuva.visible = false;
+  scene.add(chuva);
+
+  const NV = 110, vPos = new Float32Array(NV * 3), vBase = [];
+  for (let i = 0; i < NV; i++) {
+    const a = rng() * 6.28, r = 6 + rng() * 50, x = Math.cos(a) * r, z = Math.sin(a) * r;
+    vBase.push({ x, z, h: Math.max(altura(x, z), NIVEL_AGUA) + 0.6 + rng() * 1.6, f: rng() * 6.28 });
+  }
+  const matVaga = new THREE.PointsMaterial({ color: 0xe9ff7a, size: 0.5, map: texturaPonto(), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+  const vagalumes = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(vPos, 3)), matVaga);
+  vagalumes.frustumCulled = false;
+  scene.add(vagalumes);
+
   // ----- ciclo do dia e das estações -----
   const c1 = new THREE.Color(), c2 = new THREE.Color();
   const estado = { hora: 0.33, noite: 0 };
-  function atualizar(dt, tempo, mes) {
+  function atualizar(dt, tempo, mes, foco) {
     estado.hora = (estado.hora + dt / 150) % 1;
     const h = estado.hora;
     let i = 0;
@@ -300,11 +356,53 @@ export function criarMundo3D(scene) {
     matAgua.uniforms.luz.value = 0.35 + 0.65 * (1 - estado.noite);
     matNuvem.color.copy(c1.set(0xffffff).lerp(matCeu.uniforms.horizonte.value, 0.35 + estado.noite * 0.4)).multiplyScalar(1 - estado.noite * 0.55);
     vento.value = tempo * 1.8;
+    const chovendo = tempo < tempoRuim.chuvaAte;
+    if (chovendo) { sol.intensity *= 0.5; ambiente.intensity *= 0.8; }
+    scene.fog.far += ((chovendo ? 230 : 420) - scene.fog.far) * Math.min(1, dt);
+    tempoRuim.seca += (tempoRuim.secaAlvo - tempoRuim.seca) * Math.min(1, dt * 0.4);
 
     const m = Math.floor(((mes % 12) + 12) % 12);
     matFolha.color.lerp(FOLHA[m], Math.min(1, dt * 0.8));
-    matTerreno.color.lerp(CHAO[m], Math.min(1, dt * 0.8));
-    matCapim.color.copy(matFolha.color).lerp(c1.set(0xd8f08a), 0.35);
+    matTerreno.color.lerp(c2.copy(CHAO[m]).lerp(c1.set(0xf0d58a), tempoRuim.seca * 0.75), Math.min(1, dt * 0.8));
+    matCapim.color.copy(matFolha.color).lerp(c1.set(0xd8f08a), 0.35).lerp(c2.set(0xd9c06a), tempoRuim.seca);
+
+    chuva.visible = chovendo;
+    if (chovendo) {
+      chuva.position.set(foco.x, Math.max(0, foco.y - 6), foco.z);
+      for (let i = 0; i < NR; i++) {
+        let y = rTopo[i * 3 + 1] - 42 * dt;
+        if (y < 0) y += 34;
+        rTopo[i * 3 + 1] = y;
+        const x = rTopo[i * 3], z = rTopo[i * 3 + 2];
+        rPos.set([x, y, z, x + 0.25, y - 1.5, z], i * 6);
+      }
+      chuva.geometry.attributes.position.needsUpdate = true;
+    }
+    const modo = chovendo ? null : m >= 3 && m <= 5 ? 'folhas' : m === 6 || m === 7 ? 'neve' : m === 8 || m === 9 ? 'petalas' : null;
+    clima.visible = !!modo;
+    if (modo) {
+      const M2 = MODOS[modo];
+      matClima.color.set(M2.cor); matClima.size = M2.tam;
+      geoClima.setDrawRange(0, Math.floor(NP * M2.qtd));
+      clima.position.set(foco.x, Math.max(0, foco.y - 6), foco.z);
+      for (let i = 0, n = Math.floor(NP * M2.qtd); i < n; i++) {
+        pPos[i * 3 + 1] -= M2.queda * dt;
+        pPos[i * 3] += Math.sin(tempo * 1.3 + pFase[i]) * M2.deriva * dt;
+        if (pPos[i * 3 + 1] < 0) pPos[i * 3 + 1] += 34;
+      }
+      geoClima.attributes.position.needsUpdate = true;
+    }
+    matVaga.opacity = estado.noite * (0.55 + Math.sin(tempo * 2.2) * 0.25);
+    vagalumes.visible = estado.noite > 0.05;
+    if (vagalumes.visible) {
+      for (let i = 0; i < NV; i++) {
+        const v = vBase[i];
+        vPos[i * 3] = v.x + Math.sin(tempo * 0.5 + v.f) * 1.6;
+        vPos[i * 3 + 1] = v.h + Math.sin(tempo * 0.9 + v.f * 2) * 0.5;
+        vPos[i * 3 + 2] = v.z + Math.cos(tempo * 0.4 + v.f) * 1.6;
+      }
+      vagalumes.geometry.attributes.position.needsUpdate = true;
+    }
 
     for (const g of nuvens) {
       g.position.x += g.userData.v * dt;
@@ -320,5 +418,9 @@ export function criarMundo3D(scene) {
     }
   }
 
-  return { atualizar, pintarCaminhos, limparArea, estado };
+  return {
+    atualizar, pintarCaminhos, limparArea, estado, terreno, sol,
+    chover(tempo, segundos) { tempoRuim.chuvaAte = tempo + segundos; },
+    secar(nivel) { tempoRuim.secaAlvo = nivel; },
+  };
 }

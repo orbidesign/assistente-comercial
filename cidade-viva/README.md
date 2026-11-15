@@ -18,8 +18,37 @@ npm run simular -- 3 150   # semente 3, 150 anos, sem tela: imprime a trajetóri
 ```
 
 Para ligar os agentes de IA, defina `ANTHROPIC_API_KEY` antes do `npm run dev`.
-Sem a chave o jogo funciona inteiro com regras. `CIDADE_MODELO` troca o modelo
-(padrão `claude-opus-5-5`).
+Sem a chave o jogo funciona inteiro com regras.
+
+### Custo da IA
+
+O jogo foi montado para gastar pouco:
+
+- O modelo padrão é o mais barato (`claude-haiku-5-5`, US$ 0,10 por milhão de
+  tokens de entrada e US$ 0,50 de saída). `CIDADE_MODELO` troca o modelo.
+- As regras da simulação rodam sempre. A IA entra por cima, em dois momentos:
+  quando você narra em texto livre, e na reunião do conselho, que acontece no
+  máximo a cada 3 anos de jogo e nunca mais de uma vez por minuto.
+- Cada chamada usa em torno de 1.500 tokens de entrada e algumas centenas de
+  saída, o que no modelo padrão fica na casa de US$ 0,0005. É uma estimativa
+  pelos preços de tabela; não foi medida com uma chamada real.
+- Há um teto de gasto por execução do servidor (`CIDADE_LIMITE_USD`, padrão
+  0,50). Ao atingir, a IA desliga e o jogo segue com regras.
+- Narrações repetidas vêm de memória, sem nova chamada. O gasto acumulado
+  aparece no rodapé da crônica.
+
+## Controles
+
+| | Toque (celular, iPad) | Mouse e teclado |
+| --- | --- | --- |
+| Girar a câmera | arrastar com um dedo | arrastar |
+| Zoom e mover | pinça e arrastar com dois dedos | roda e botão direito |
+| Ver uma família ou prédio | tocar | clicar |
+| Voar até um ponto | tocar duas vezes | duplo clique |
+| Andar pela cidade | 🚶, depois alavanca ou toque no chão | `V`, depois WASD |
+| Só assistir | 🎬 (câmera passeia sozinha) | `C` |
+| Trocar a hora do dia | 🌗 | 🌗 |
+| Jogar uma carta | tocar na carta, depois Jogar | igual |
 
 ## Decisões de design
 
@@ -67,7 +96,7 @@ src/sim/      simulação pura (sem tela), determinística por semente, estado e
   dados.js    tabelas: bens, eras, negócios, serviços, cartas  <- balanceamento
   sim.js      o mês, mercado, Estado, eventos, decisões dos agentes
   geo.js      forma do vale e lotes de construção
-src/render/   three.js: vale, céu, vegetação, prédios procedurais, moradores
+src/render/   three.js: vale, céu, clima, prédios procedurais, moradores, efeitos
 src/ui.js     painéis em HTML
 server/       ponte com a API da Anthropic (eventos em texto livre e conselho anual)
 test/         testes e simulador de linha de comando
@@ -75,17 +104,21 @@ test/         testes e simulador de linha de comando
 
 ## Estado atual
 
-Verificado: simulação (10 testes, cinco sementes por 100 anos), a cena 3D em
-navegador do assentamento à cidade industrial, cartas, texto livre sem IA,
-inspetor, modo andar, salvar e recarregar.
+Verificado: simulação (10 testes, cinco sementes por 100 anos); a cena 3D em
+navegador do assentamento à cidade industrial; cartas, texto livre sem IA,
+inspetor, modo andar, modo cinema, efeitos de evento, salvar e recarregar; e a
+interface em emulação de iPhone e iPad, em pé e deitado, com toque.
+
+Não verificado em aparelho físico: o teste de toque foi feito por emulação no
+Chromium. Desempenho real em iPhone e iPad ainda precisa ser conferido; a cena
+reduz a própria resolução se o aparelho não acompanhar.
 
 Não verificado: as chamadas reais à IA. O servidor está escrito e responde
 corretamente sem credencial, mas não havia chave neste ambiente para testar uma
 resposta de verdade.
 
 Limites conhecidos: o balanceamento é um primeiro passe (a cidade chega à
-metrópole em 70 a 90 anos e depois estabiliza); o avatar atravessa paredes; no
-celular dá para observar e narrar, mas não para andar.
+metrópole em 70 a 90 anos e depois estabiliza); o avatar atravessa paredes.
 
 ## Próximos passos
 
