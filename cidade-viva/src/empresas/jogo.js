@@ -22,7 +22,8 @@ export const CEOS = {
 export const REGRAS = {
   simplesTeto: 4_800_000,   // Simples Nacional: receita dos últimos 12 meses até R$ 4,8 milhões
   simples: [[180_000, 0.04, 0], [360_000, 0.073, 5_940], [720_000, 0.095, 13_860], [1_800_000, 0.107, 22_500], [3_600_000, 0.143, 87_300], [4_800_000, 0.19, 378_000]],
-  encargosSimples: 0.35, encargos: 0.7, rescisao: 0.25,
+  encargosSimples: 0.2, encargos: 0.48,   // sobre a folha (13º já está no salário): FGTS, férias e provisões; fora do Simples, mais INSS patronal, terceiros e RAT
+  rescisao: 0.25,
   tributoVendas: 0.09, iva: 0.265, ivaAlimentos: 0.5, anoIVA: 2033, irpj: 0.34, irAplicacao: 0.15,
   pisoSalarial: 0.7,                        // salário mínimo de 2026 (R$ 1.621) sobre o salário de mercado do setor
   inssProLabore: 0.11, tetoInss: 932.31,    // 11% sobre o pró-labore, até o teto de contribuição de 2026 (R$ 8.475,55)
@@ -78,14 +79,14 @@ export const GOVERNO = {
 
 // O que um empresário pode ter. Valores por unidade, por ANO, a preços de 2026.
 export const NEGOCIOS = {
-  padaria: { nome: 'Padaria de bairro', capex: 350_000, receita: 900_000, insumo: 0.3, func: 8, aluguel: 60_000, S: 150, complexidade: 1 },
-  cafeteria: { nome: 'Cafeteria e confeitaria', capex: 380_000, receita: 900_000, insumo: 0.29, func: 7, aluguel: 110_000, S: 80, complexidade: 1.1, requer: { qualidade: 0.55 } },
+  padaria: { nome: 'Padaria de bairro', capex: 350_000, receita: 900_000, insumo: 0.32, func: 8, aluguel: 60_000, S: 150, complexidade: 1 },
+  cafeteria: { nome: 'Cafeteria e confeitaria', capex: 380_000, receita: 900_000, insumo: 0.31, func: 7, aluguel: 110_000, S: 80, complexidade: 1.1, requer: { qualidade: 0.55 } },
   minimercado: { nome: 'Minimercado de bairro', capex: 600_000, receita: 2_400_000, insumo: 0.72, func: 10, aluguel: 120_000, S: 120, complexidade: 1.3 },
-  restaurante: { nome: 'Restaurante', capex: 550_000, receita: 1_500_000, insumo: 0.33, func: 14, aluguel: 130_000, S: 100, complexidade: 1.5, requer: { qualidade: 0.5 } },
-  delivery: { nome: 'Cozinha de entrega e aplicativo próprio', capex: 220_000, receita: 700_000, insumo: 0.36, func: 5, aluguel: 30_000, S: 60, complexidade: 1.2, digital: 1, requer: { tecnologia: 0.4 } },
-  fabrica: { nome: 'Padaria industrial (pães e congelados para mercados)', capex: 6_000_000, receita: 9_000_000, insumo: 0.5, func: 40, aluguel: 250_000, S: 12, complexidade: 4, requer: { unidades: 3 } },
+  restaurante: { nome: 'Restaurante', capex: 550_000, receita: 1_500_000, insumo: 0.35, func: 14, aluguel: 130_000, S: 100, complexidade: 1.5, requer: { qualidade: 0.5 } },
+  delivery: { nome: 'Cozinha de entrega e aplicativo próprio', capex: 220_000, receita: 700_000, insumo: 0.4, func: 5, aluguel: 30_000, S: 60, complexidade: 1.2, digital: 1, requer: { tecnologia: 0.4 } },
+  fabrica: { nome: 'Padaria industrial (pães e congelados para mercados)', capex: 6_000_000, receita: 9_000_000, insumo: 0.53, func: 40, aluguel: 250_000, S: 12, complexidade: 4, requer: { unidades: 3 } },
   distribuidora: { nome: 'Distribuidora de farinha e insumos', capex: 1_200_000, receita: 6_000_000, insumo: 0.8, func: 12, aluguel: 150_000, S: 10, complexidade: 2, requer: { unidades: 4 } },
-  marca_nacional: { nome: 'Indústria de alimentos com marca nacional', capex: 60_000_000, receita: 60_000_000, insumo: 0.52, func: 180, aluguel: 900_000, S: 6, complexidade: 12, requer: { fabricas: 2, marca: 0.6 } },
+  marca_nacional: { nome: 'Indústria de alimentos com marca nacional', capex: 60_000_000, receita: 60_000_000, insumo: 0.55, func: 180, aluguel: 900_000, S: 6, complexidade: 12, requer: { fabricas: 2, marca: 0.6 } },
 };
 export const FRANQUIA = { lancamento: 150_000, royalties: 0.06, taxa: 60_000, requer: { padarias: 5, marca: 0.5 } };
 
@@ -270,7 +271,7 @@ const lucro12 = (op) => (op.lucros12.length ? (op.lucros12.reduce((s, v) => s + 
 function valorDaOperacao(c, op) {
   const def = NEGOCIOS[op.tipo], u = op.unidades + op.fora;
   if (!u) return 0;
-  const r = receita12(c), multiplo = r > 500e6 ? 10 : r > 50e6 ? 7 : r > 5e6 ? 5.5 : 4;
+  const r = receita12(c), multiplo = r > 500e6 ? 7 : r > 50e6 ? 6 : r > 5e6 ? 5 : 3.5;
   return Math.max(0, lucro12(op)) * multiplo + u * def.capex * 0.4;
 }
 export function valorDaEmpresa(j, c) {
@@ -604,12 +605,16 @@ function executarPauta(j, c) {
       if (c.recuperacao) { nota(j, c, false, 'Em recuperação judicial, não pode abrir unidades.', true); continue; }
       if (falta && totalUnidades(c) > 0) { nota(j, c, false, `${def.nome}: ${falta}.`, true); continue; }
       const custo = def.capex * mun(j).capex * (m.negocio === 'padaria' && c.pontoBom === j.t ? 0.75 : 1);
-      const q = Math.min(m.quantidade, Math.floor(Math.max(0, c.caixa) / custo));
+      // Abrir exige obra, contratação e treinamento: em 12 meses, no máximo uma unidade mais metade das que já existem.
+      c.aberturas = (c.aberturas || []).filter((t) => t > j.t - 12);
+      const folego = Math.max(0, 1 + Math.floor(0.5 * totalUnidades(c)) - c.aberturas.length);
+      if (folego < 1) { nota(j, c, false, `Não deu para abrir ${def.nome.toLowerCase()} agora: a empresa ainda está digerindo as últimas aberturas (obra, contratação e treinamento).`, true); continue; }
+      const q = Math.min(m.quantidade, folego, Math.floor(Math.max(0, c.caixa) / custo));
       if (q < 1) { nota(j, c, false, `Sem caixa para abrir ${def.nome.toLowerCase()} (${reais(custo)} por unidade).`, true); continue; }
       const novo = unidadesDe(c, m.negocio) === 0;
       c.ops[m.negocio] ||= novaOperacao(m.negocio);
       const op = c.ops[m.negocio];
-      c.caixa -= q * custo;
+      c.caixa -= q * custo; for (let i = 0; i < q; i++) c.aberturas.push(j.t);
       op.experiencia = lim((op.experiencia * op.equipe + 0.3 * q * op.func) / Math.max(1, op.equipe + q * op.func), 0, 1);
       // Cada unidade vai para um lugar: o escolhido, ou o melhor disponível.
       // A ocupação é a do começo do mês, igual para os três: quem é processado antes não leva o melhor ponto.
@@ -837,17 +842,23 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
     const greve = op.salario < 0.85 && sorte(j, `greve:${op.tipo}`) < 0.05;
     const choques = op.efeitos.reduce((s, e) => s * e.fator, 1) * cidadeMes.vendas * ef.vendas * (greve ? 0.6 : 1);
     const base = (def.receita / 12) * renda * Math.pow(rel, 0.85) * SAZONAL[mes] * digital * atendimento * folga * choques * (0.94 + 0.2 * c.vendas) * (1 + 0.22 * Math.min(1.5, op.publico || 0)) * (op.impulso || 1);
-    const limite = u * (def.receita / 12) * renda * 1.4 * atendimento * SAZONAL[mes] * (0.895 + 0.3 * c.operacoes);
+    // Quem atende e produz é gente: cada funcionário dá conta de uma fatia das vendas; processo e tecnologia aumentam essa fatia.
+    // O ponto também tem teto físico (1,8 vez a venda de referência por unidade).
+    const porPessoa = (def.receita / 12 / def.func) * renda * SAZONAL[mes] * moral * (0.95 + 0.25 * c.operacoes + 0.15 * c.tecnologia);
+    // Em bairro de renda maior, o mesmo atendente vende um tíquete maior.
+    const limite = Math.min(op.equipe * porPessoa * Math.sqrt(Math.max(0.3, pontos / u)), u * (def.receita / 12) * renda * 1.8 * SAZONAL[mes]);
     const volume = Math.min(limite, base * pontos);
     const rec = volume * op.preco * ef.cartel;
     const ins = volume * def.insumo * Math.pow(j.trigo, 1 - 0.5 * c.compras) * (1.03 - 0.1 * c.compras) * (1 - sinergia) * (1 - 0.1 * c.tecnologia) / folga ** 0.3;
     const fol = op.equipe * sal * op.salario;
     const alu = aluguelLocal * (def.aluguel / 12) * Math.pow(cid.renda / j.base.renda, 0.7) * op.aluguel;
-    const fix = u * (def.receita / 12) * 0.05 * ef.fixo * M.fixos;
+    const fix = (u * (def.receita / 12) * 0.05 + rec * 0.015) * ef.fixo * M.fixos;   // energia, gás, taxas; mais 1,5% das vendas em taxa de cartão
     op.receita = rec; porOp[op.tipo] = { rec, direto: ins + fol + alu + fix, fol };
     receita += rec; insumos += ins; folha += fol; alugueis += alu; fixos += fix; funcionarios += op.equipe;
     if (greve) { nota(j, c, false, `Greve por salários em ${def.nome.toLowerCase()}: mês com 40% menos vendas.`); evento(j, c, `Greve em ${def.nome.toLowerCase()}: salário abaixo do mercado.`); }
     op.efeitos = op.efeitos.filter((e) => --e.meses > 0);
+    // Valores são a preços de 2026: um aluguel reajustado acima do mercado volta aos poucos ao preço de mercado.
+    op.aluguel += (1 - op.aluguel) * 0.004;
     // Cliente conquistado se perde aos poucos; o canal descansa quando não é usado.
     op.publico = (op.publico || 0) * 0.94; op.impulso = 1;
     for (const k of Object.keys(op.fadiga || {})) { op.fadiga[k] -= 0.1; if (op.fadiga[k] <= 0) delete op.fadiga[k]; }
@@ -864,6 +875,9 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
   const contratos = c.contratos.reduce((s, k) => s + k.mensal, 0);
   c.contratos = c.contratos.filter((k) => --k.meses > 0);
   receita += royalties + contratos; insumos += contratos * 0.55;
+  // Rede grande precisa de escritório: administração, RH, contabilidade e sistemas crescem com o número de unidades.
+  const sede = receita * Math.min(0.06, 0.012 * Math.log2(1 + totalUnidades(c) / 5));
+  fixos += sede;
   const premio = c.seguro ? receita * 0.004 : 0;
   // Regime pela receita dos últimos 12 meses (regra do Simples).
   c.receitas12 = [...c.receitas12.slice(-11), receita];
@@ -1084,7 +1098,8 @@ export function ceoPorRegras(j, c, perfil = 'padeiro') {
     d.respostas.push({ id: p.id, opcao });
   }
   const mensal = c.receita || 65_000, reserva = mensal * 0.35;
-  const livre = Math.max(0, c.caixa - reserva) / 3;                    // gasta o excedente aos poucos
+  const excedente = Math.max(0, c.caixa - reserva);
+  const livre = Math.min(excedente / 3, Math.max(0, c.lucro) * 0.6);   // investe parte do lucro do mês e guarda o resto para crescer
   for (const op of Object.values(c.ops)) {
     const u = op.unidades + op.fora;
     if (!u) continue;
@@ -1098,7 +1113,7 @@ export function ceoPorRegras(j, c, perfil = 'padeiro') {
   { const canais = Object.keys(CANAIS), ops = Object.values(c.ops).filter((o) => o.unidades + o.fora > 0).sort((x, y) => y.receita - x.receita); if (ops[0] && livre > 0 && perfil !== 'inercia') d.apostas = [{ canal: canais[j.t % canais.length], negocio: ops[0].tipo, abordagem: ABORDAGENS[Math.floor(j.t / canais.length) % ABORDAGENS.length], investimento: Math.min(livre * 0.1, ops[0].receita * 0.02) }]; }
   d.financas.pro_labore = Math.round(custoDeVida(j) * 1.15);
   if (c.pessoal.divida > 0 && c.lucrosRetidos > 0 && c.caixa > reserva) d.financas.distribuir_lucros = Math.min(c.pessoal.divida * 1.1, c.caixa - reserva);
-  const sobra = livre * 3 * (1 - 0.52 * P.reinveste);
+  const sobra = excedente * (1 - 0.3 * P.reinveste);
   const folga = capacidadeDeGestao(c) - cargaDeGestao(c);
   const rende = (t) => unidadesDe(c, t) === 0 || lucro12(c.ops[t]) > 0;
   const quer = (t) => !cumpre(c, NEGOCIOS[t]) && folga > NEGOCIOS[t].complexidade && rende(t);

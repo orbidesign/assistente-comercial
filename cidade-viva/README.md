@@ -84,13 +84,24 @@ Números oficiais usados (valores de 2026):
 - Ganho de capital na venda da empresa: 15%, 17,5%, 20% e 22,5% por faixas (Lei 13.259/2016).
 - Recuperação judicial e falência (Lei 11.101/2005); IVA da reforma tributária a partir de 2033 (EC 132).
 
-Esses valores vieram de portais contábeis e jurídicos que citam as normas, não diretamente do site da Receita; vale conferir antes de tratar como referência. São estimativas minhas: ICMS (embutido nos cerca de 9% sobre vendas fora do Simples), encargos sobre a folha (35% e 70%), demanda, custo de abertura e margens dos negócios, fatores dos bairros, coordenadas, efeito das valências, dos canais e dos governos.
+Esses valores vieram de portais contábeis e jurídicos que citam as normas, não diretamente do site da Receita; vale conferir antes de tratar como referência. São estimativas minhas: ICMS (embutido nos cerca de 9% sobre vendas fora do Simples), encargos sobre a folha (20% no Simples e 48% fora, com o 13º já contado no salário), demanda, custo de abertura e margens dos negócios, fatores dos bairros, coordenadas, efeito das valências, dos canais e dos governos.
+
+### Equilíbrio (medido com jogadores por regras, 6 partidas de 50 anos cada)
+
+| Jogador por regras | Patrimônio em dez/2075 |
+|---|---|
+| Inércia (nunca decide) | fora do jogo nas 6 |
+| Padeiro (cuida de poucas unidades) | R$ 15 a 33 milhões |
+| Diversificador | R$ 200 a 490 milhões |
+| Expansionista (toma crédito e abre sem parar) | quebra em 2 de 6; nas outras, R$ 490 a 635 milhões |
+
+O que segura os números: a venda de cada unidade depende de gente (cada funcionário atende uma fatia das vendas), a margem de uma padaria bem tocada fica entre 12% e 18% antes do pró-labore, abrir unidades tem ritmo (em 12 meses, uma mais metade das que existem; comprar negócio pronto não entra nesse limite), rede grande paga escritório central (até 6% da receita) e o aluguel real volta ao preço de mercado. Isso foi calibrado só com esses jogadores de regras; uma IA pode se sair melhor ou pior.
 
 ### Não verificado
 
 - Nenhuma chamada real às três APIs foi feita (não havia chaves). Os IDs padrão de Grok e Gemini (`grok-4.7`, `gemini-3.1-pro`) e seus preços precisam ser confirmados; troque com `ARENA_MODELO_XAI` / `ARENA_MODELO_GEMINI`.
 - O caminho do Google Maps não foi testado (sem chave). Os ladrilhos do OpenStreetMap também não puderam ser carregados no ambiente de desenvolvimento; selos e layout foram testados.
-- O equilíbrio do jogo é uma primeira passada, calibrada só com jogadores por regras.
+- O equilíbrio foi medido só com jogadores por regras; nenhuma partida com IA de verdade foi rodada.
 
 ### Torneio sem tela
 
