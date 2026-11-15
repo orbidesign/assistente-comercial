@@ -1,14 +1,14 @@
 // Três empresários (Claude, Grok, Gemini) começam iguais em janeiro de 2026: uma
 // padaria de bairro em Campinas, R$ 20 mil no caixa da empresa. O jogo anda mês
-// a mês até dezembro de 2125. Vence quem tiver o maior patrimônio pessoal
+// a mês até dezembro de 2075 (50 anos). Vence quem tiver o maior patrimônio pessoal
 // (bens próprios mais o valor da empresa). Lógica pura, determinística, em JSON.
 // Dinheiro em reais, a preços de 2026 (sem inflação).
 import { LOCAIS, PONTO_INICIAL } from './campinas.js';
-import { criarMunicipio, avancarAno, aplicarDecisao, prefeitoPorRegras, cenarioDoAno, retrato, ANO_INICIAL, ANO_FINAL } from '../brasil/municipio.js';
+import { criarMunicipio, avancarAno, aplicarDecisao, prefeitoPorRegras, cenarioDoAno, retrato, ANO_INICIAL } from '../brasil/municipio.js';
 
-export const TOKENS_SECULO = 10_000_000;   // verba igual para os três: dá para 1.200 despachos mensais enxutos
+export const TOKENS_JOGO = 5_000_000;   // verba igual para os três: dá para 600 despachos mensais enxutos
 export const CAIXA_INICIAL = 20_000;
-export const MESES = (ANO_FINAL - ANO_INICIAL) * 12;
+export const MESES = 600;   // 50 anos: de janeiro de 2026 a dezembro de 2075
 export const NOME_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const SAZONAL = [0.9, 0.88, 0.97, 1, 1.03, 1.08, 1.02, 0.98, 0.98, 1.02, 1.02, 1.2];   // dezembro forte, verão fraco
 
@@ -24,11 +24,44 @@ export const REGRAS = {
   simples: [[180_000, 0.04, 0], [360_000, 0.073, 5_940], [720_000, 0.095, 13_860], [1_800_000, 0.107, 22_500], [3_600_000, 0.143, 87_300], [4_800_000, 0.19, 378_000]],
   encargosSimples: 0.35, encargos: 0.7, rescisao: 0.25,
   tributoVendas: 0.09, iva: 0.265, ivaAlimentos: 0.5, anoIVA: 2033, irpj: 0.34, irAplicacao: 0.15,
-  pisoSalarial: 0.75,
-  inssProLabore: 0.11, tetoInss: 900,      // o empresário recolhe 11% sobre o pró-labore, até o teto
-  isentoIRPF: 5_000,                        // pró-labore até R$ 5 mil por mês não paga imposto de renda
-  lucrosIsentos: 50_000, irLucros: 0.1,     // lucros distribuídos acima de R$ 50 mil por mês: 10% na fonte
+  pisoSalarial: 0.7,                        // salário mínimo de 2026 (R$ 1.621) sobre o salário de mercado do setor
+  inssProLabore: 0.11, tetoInss: 932.31,    // 11% sobre o pró-labore, até o teto de contribuição de 2026 (R$ 8.475,55)
+  // IRPF mensal: tabela progressiva em vigor (limite da faixa, alíquota, parcela a deduzir)
+  irpf: [[2_428.80, 0, 0], [2_826.65, 0.075, 182.16], [3_751.05, 0.15, 394.16], [4_664.68, 0.225, 675.49], [Infinity, 0.275, 908.73]],
+  isentoIRPF: 5_000, reducaoAte: 7_350,     // Lei 15.270/2025: imposto zero até R$ 5 mil; redução parcial até R$ 7.350
+  lucrosIsentos: 50_000, irLucros: 0.1,     // Lei 15.270/2025: lucros acima de R$ 50 mil por mês, 10% na fonte
+  // Lucro presumido (comércio): presunção de 8% (IRPJ) e 12% (CSLL); IRPJ 15% mais 10% sobre o que passa de R$ 20 mil por mês; CSLL 9%
+  presumidoTeto: 78_000_000, presIRPJ: 0.08, presCSLL: 0.12, irpjBase: 0.15, irpjAdicional: 0.1, adicionalAcima: 20_000, csll: 0.09,
+  // Ganho de capital da pessoa física na venda da empresa (Lei 13.259/2016)
+  ganhoDeCapital: [[5_000_000, 0.15], [10_000_000, 0.175], [30_000_000, 0.2], [Infinity, 0.225]],
 };
+
+// Imposto de renda do mês sobre o pró-labore (k acompanha a renda real da cidade).
+export function irpfMensal(bruto, inss = 0, k = 1) {
+  const b = bruto / k, base = Math.max(0, (bruto - inss) / k);
+  if (b <= REGRAS.isentoIRPF) return 0;
+  const f = REGRAS.irpf.find(([teto]) => base <= teto);
+  let ir = Math.max(0, base * f[1] - f[2]);
+  if (b <= REGRAS.reducaoAte) ir = Math.max(0, ir - (978.62 - 0.133145 * b));
+  return ir * k;
+}
+// Imposto sobre o ganho de capital, por faixas.
+export function impostoGanhoDeCapital(ganho) {
+  let ir = 0, antes = 0;
+  for (const [teto, aliq] of REGRAS.ganhoDeCapital) { if (ganho <= antes) break; ir += (Math.min(ganho, teto) - antes) * aliq; antes = teto; }
+  return ir;
+}
+
+// Canais de divulgação e crescimento. O que cada um rende NÃO está escrito em
+// lugar nenhum que o empresário leia: depende do negócio, da mensagem, da época
+// e da sorte. Só se descobre testando e olhando o resultado.
+export const CANAIS = {
+  instagram_posts: 'Instagram: posts e reels próprios', instagram_anuncios: 'Instagram: anúncios pagos', influenciador: 'Parceria com influenciador local',
+  whatsapp: 'Lista de clientes e pedidos por WhatsApp', google: 'Perfil no Google e avaliações', app_de_entrega: 'Aplicativos de entrega',
+  fidelidade: 'Programa de fidelidade', panfleto: 'Panfleto e carro de som no bairro', degustacao: 'Degustação e eventos na loja',
+  produto_novo: 'Lançamento de produto novo', empresas: 'Venda para empresas, escolas e condomínios', radio_e_jornal: 'Rádio e jornal local', video_curto: 'Vídeos curtos em outras redes',
+};
+export const ABORDAGENS = ['produto', 'preco', 'bastidores', 'clientes', 'humor', 'bairro'];
 
 // Quem governa muda as regras do jogo para o empresário. Eleição federal em
 // outubro de 2026, 2030, ...; municipal em 2028, 2032, ... Posse em janeiro.
@@ -141,18 +174,31 @@ function sorte(j, chave, n = 0) {
   h ^= h >>> 15; h = Math.imul(h, 2246822519); h ^= h >>> 13; h = Math.imul(h, 3266489917); h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
+// Número fixo da partida: depende só da semente e da chave. É como o mundo "é".
+function fixo(j, chave) {
+  let h = (j.semente ^ 0x51ed270b) | 0;
+  for (let i = 0; i < chave.length; i++) h = Math.imul(h ^ chave.charCodeAt(i), 16777619);
+  h ^= h >>> 15; h = Math.imul(h, 2246822519); h ^= h >>> 13; h = Math.imul(h, 3266489917); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+// Quanto um canal funciona para um tipo de negócio com uma mensagem. Oculto; muda devagar a cada oito anos.
+function afinidade(j, canal, tipo, abordagem) {
+  const fase = Math.floor(j.t / 96);
+  const a = 0.6 * fixo(j, `af|${canal}|${tipo}`) + 0.4 * fixo(j, `af|${canal}|${tipo}|${fase}`);
+  return (0.12 + 1.7 * a * a) * (0.5 + fixo(j, `ab|${canal}|${tipo}|${abordagem}|${fase}`));
+}
 // Quantas vezes algo acontece quando há n chances de probabilidade p.
 function quantos(j, chave, n, p) {
   const esperado = n * p, base = Math.floor(esperado);
   return base + (sorte(j, chave) < esperado - base ? 1 : 0);
 }
 
-const novaOperacao = (tipo, unidades = 0, local = 'centro') => ({ tipo, unidades, fora: 0, locais: unidades ? { [local]: unidades } : {}, preco: 1, qualidade: 0.5, salario: 1, func: NEGOCIOS[tipo].func, equipe: unidades * NEGOCIOS[tipo].func, experiencia: 0.6, receita: 0, lucro: 0, lucros12: [], vendoPor: 0, efeitos: [], aluguel: 1, contrato: 0 });
+const novaOperacao = (tipo, unidades = 0, local = 'centro') => ({ tipo, unidades, fora: 0, locais: unidades ? { [local]: unidades } : {}, preco: 1, qualidade: 0.5, salario: 1, func: NEGOCIOS[tipo].func, equipe: unidades * NEGOCIOS[tipo].func, experiencia: 0.6, receita: 0, lucro: 0, lucros12: [], vendoPor: 0, efeitos: [], aluguel: 1, contrato: 0, publico: 0, impulso: 1, fadiga: {} });
 
 function novoCEO(id) {
   const c = {
     id, nome: CEOS[id].nome, marcaNome: CEOS[id].marca,
-    caixa: CAIXA_INICIAL, divida: 0, lucrosRetidos: 0,
+    caixa: CAIXA_INICIAL, divida: 0, lucrosRetidos: 0, capital: 160_000, empresasVendidas: 0, herdados: [],
     pessoal: { caixa: 3_000, rendaFixa: 0, bolsa: 0, imoveis: 0, divida: 0 }, proLabore: 3_500,
     franqueados: 0, franquia: false, contratos: [],
     ...PADRAO, seguro: false, reposicao: 'manual',
@@ -170,7 +216,7 @@ function novoCEO(id) {
 
 export function criarJogo(semente = 1, ids = Object.keys(CEOS)) {
   const j = {
-    versao: 2, semente, t: 0, cidade: criarMunicipio(semente, 'Campinas', { escala: 9.5, produtividade: 150 }), ceos: ids.map(novoCEO), log: [],
+    versao: 3, semente, anuncios: [], proxAnuncio: 1, t: 0, cidade: criarMunicipio(semente, 'Campinas', { escala: 9.5, produtividade: 150 }), ceos: ids.map(novoCEO), log: [],
     politica: { federal: { lado: 'esquerda', desde: 2023 }, municipal: { lado: 'direita', desde: 2021 } },
     trigo: 1, juros: 0.06, bolsaMes: 0, cen: null,
   };
@@ -188,10 +234,10 @@ function ponto(j, c) {
 
 export const ceo = (j, id) => j.ceos.find((c) => c.id === id);
 export const ativos = (j) => j.ceos.filter((c) => !c.quebrou);
-// O jogo vai sempre até dezembro de 2125: fracassar faz parte, e quem sobrou continua jogando.
+// O jogo vai sempre até dezembro de 2075: fracassar faz parte, e quem sobrou continua jogando.
 export const terminou = (j) => j.t >= MESES || ativos(j).length === 0;
 export const naVez = (j, c) => !c.quebrou && !c.afastado && j.t >= c.proximoDespacho;
-export const temTokens = (c) => c.tokens + (c.mediaTokens || 4500) <= TOKENS_SECULO;
+export const temTokens = (c) => c.tokens + (c.mediaTokens || 4500) <= TOKENS_JOGO;
 export const classificacao = (j) => [...j.ceos].sort((a, b) => (a.quebrou ? 1 : 0) - (b.quebrou ? 1 : 0) || b.patrimonio - a.patrimonio);
 export function vencedor(j) {
   const v = ativos(j);
@@ -290,12 +336,15 @@ export function dossie(j, c) {
       negocios: Object.values(c.ops).filter((o) => o.unidades + o.fora > 0).map((o) => ({
         negocio: o.tipo, unidades_em_campinas: o.unidades, unidades_fora: o.fora, onde: Object.entries(o.locais).map(([l, n]) => `${l}:${n}`).join(' '), preco_indice: r2(o.preco), qualidade: r2(o.qualidade), salario_indice: r2(o.salario),
         equipe: R(o.equipe), equipe_ideal: R((o.unidades + o.fora) * o.func), experiencia_da_equipe: r2(o.experiencia), receita_do_mes: R(o.receita), lucro_do_mes: R(o.lucro),
-        efeitos_em_curso: o.efeitos.map((e) => `${e.motivo} (${e.meses} meses)`),
+        publico_fiel_indice: r2(o.publico || 0), efeitos_em_curso: o.efeitos.map((e) => `${e.motivo} (${e.meses} meses)`),
       })),
       franqueados: c.franquia ? c.franqueados : 'franquia não lançada', contratos_publicos: c.contratos.length,
     },
     resultado_do_mes_passado: ult?.resultado || 'primeiro mês',
+    retorno_das_suas_ordens: (ult?.notas || []).slice(-10).map((n) => `${n.ok ? 'ok' : 'não'}: ${n.texto.slice(0, 240)}`),
+    resultado_das_apostas: ult?.apostas || [],
     aconteceu_agora: (ult?.eventos || []).slice(-8),
+    negocios_a_venda: (j.anuncios || []).map((a) => anuncioPublico(a, j)),
     pendencias_para_responder: c.pendencias.map((p) => ({ id: p.id, o_que: p.texto, opcoes: p.opcoes })),
     cenario: {
       governo_federal: `${j.politica.federal.lado}: ${fed(j).texto}`, prefeitura: `${j.politica.municipal.lado}: ${mun(j).texto}`,
@@ -309,7 +358,7 @@ export function dossie(j, c) {
       franqueados: r.franqueados, valencias: Object.fromEntries(Object.entries(VALENCIAS).map(([k, v]) => [k, r2(r[v.campo])])),
     })),
     sua_estrategia: c.estrategia || '(ainda não escrita)', sua_memoria: c.memoria || '(vazia)',
-    tokens: { restantes: Math.max(0, TOKENS_SECULO - c.tokens), media_por_despacho: R(c.mediaTokens || 0), suficiente_para_meses: c.mediaTokens ? Math.floor((TOKENS_SECULO - c.tokens) / c.mediaTokens) : null },
+    tokens: { restantes: Math.max(0, TOKENS_JOGO - c.tokens), media_por_despacho: R(c.mediaTokens || 0), suficiente_para_meses: c.mediaTokens ? Math.floor((TOKENS_JOGO - c.tokens) / c.mediaTokens) : null },
   };
 }
 
@@ -327,8 +376,11 @@ export function despachar(j, c, dec, modo, tokens = 0) {
   if (dec && typeof dec === 'object' && !c.quebrou) {
     const J = (o) => texto(o && o.justificativa, 600);
     const V = (o, k) => Math.max(0, num(o && o[k]));
-    const movimentos = (Array.isArray(dec.movimentos) ? dec.movimentos : []).filter((m) => m && ['abrir', 'fechar', 'vender', 'lancar_franquia'].includes(m.acao) && (m.acao === 'lancar_franquia' || NEGOCIOS[m.negocio])).slice(0, 6)
-      .map((m) => ({ acao: m.acao, negocio: m.negocio || 'padaria', quantidade: lim(Math.round(num(m.quantidade, 1)), 1, 500), onde: LOCAIS[m.onde] ? m.onde : m.onde === 'fora' ? 'fora' : 'campinas', justificativa: texto(m.justificativa, 500) }));
+    const movimentos = (Array.isArray(dec.movimentos) ? dec.movimentos : []).filter((m) => m && ['abrir', 'fechar', 'vender', 'lancar_franquia', 'vender_empresa', 'comprar_anuncio', 'auditar_anuncio'].includes(m.acao) && (!['abrir', 'fechar', 'vender'].includes(m.acao) || NEGOCIOS[m.negocio])).slice(0, 8)
+      .map((m) => ({ acao: m.acao, negocio: m.negocio || 'padaria', quantidade: lim(Math.round(num(m.quantidade, 1)), 1, 500), onde: LOCAIS[m.onde] ? m.onde : m.onde === 'fora' ? 'fora' : 'campinas', anuncio: Math.round(num(m.anuncio)), oferta: Math.max(0, num(m.oferta)), justificativa: texto(m.justificativa, 500) }));
+    // Apostas de crescimento: dinheiro em um canal, para um negócio, com uma mensagem.
+    const apostas = (Array.isArray(dec.apostas) ? dec.apostas : []).filter((a) => a && CANAIS[a.canal] && NEGOCIOS[a.negocio]).slice(0, 6)
+      .map((a) => ({ canal: a.canal, negocio: a.negocio, abordagem: ABORDAGENS.includes(a.abordagem) ? a.abordagem : 'produto', investimento: Math.max(0, num(a.investimento)), justificativa: texto(a.justificativa, 400) }));
     const brutas = Array.isArray(dec.operacoes) ? Object.fromEntries(dec.operacoes.filter((o) => o && o.negocio).map((o) => [o.negocio, o])) : dec.operacoes && typeof dec.operacoes === 'object' ? dec.operacoes : {};
     const operacoes = {};
     for (const [t, o] of Object.entries(brutas)) {
@@ -345,7 +397,7 @@ export function despachar(j, c, dec, modo, tokens = 0) {
     for (const [k, area] of Object.entries(AREA)) if (V(g, k) > 0) agenda.push({ dia: 1, area, acao: '', investimento: V(g, k) });
     agenda.sort((x, y) => x.dia - y.dia);
     c.pauta = {
-      movimentos, operacoes, acoes, respostas, agenda,
+      movimentos, operacoes, acoes, respostas, agenda, apostas,
       seguro: typeof g.seguro === 'boolean' ? g.seguro : null, reposicao: ['manual', 'automatica'].includes(g.reposicao_de_pessoal) ? g.reposicao_de_pessoal : null,
       financas: Object.fromEntries(['tomar_emprestimo', 'amortizar_divida', 'distribuir_lucros', 'aporte_do_dono'].map((k) => [k, V(f, k)])),
       proLabore: Number.isFinite(+f.pro_labore) ? Math.max(0, +f.pro_labore) : null,
@@ -358,7 +410,7 @@ export function despachar(j, c, dec, modo, tokens = 0) {
     reg.diario = texto(dec.diario, 900);
     reg.agenda = agenda;
     reg.decisao = {
-      estrategia: texto(dec.estrategia, 700), movimentos, operacoes, respostas, acoes_externas: acoes,
+      estrategia: texto(dec.estrategia, 700), movimentos, operacoes, respostas, apostas, acoes_externas: acoes,
       gestao: { seguro: c.pauta.seguro, reposicao_de_pessoal: c.pauta.reposicao, justificativa: J(g) },
       financas: { ...c.pauta.financas, pro_labore: c.pauta.proLabore, justificativa: J(f) }, bolso: { ...c.pauta.bolso, justificativa: J(b) },
       acao_livre: texto(dec.acao_livre, 700), fala: texto(dec.fala, 240), memoria: texto(dec.memoria, 500), proximo_despacho_em_meses: c.proximoDespacho - j.t,
@@ -457,7 +509,7 @@ function executarPauta(j, c) {
   if (p.seguro !== null && p.seguro !== c.seguro) { c.seguro = p.seguro; nota(j, c, true, c.seguro ? 'Contrata seguro (0,4% da receita por mês).' : 'Cancela o seguro.'); }
   if (p.reposicao) c.reposicao = p.reposicao;
   if (p.proLabore !== null && Math.abs(p.proLabore - c.proLabore) > 1) { nota(j, c, true, `Pró-labore: de ${reais(c.proLabore)} para ${reais(p.proLabore)} por mês.`); c.proLabore = p.proLabore; }
-  if (f.aporte_do_dono > 0) { const v = Math.min(f.aporte_do_dono, Math.max(0, c.pessoal.caixa)); if (v >= 100) { c.pessoal.caixa -= v; c.caixa += v; nota(j, c, true, `O dono põe ${reais(v)} do próprio bolso na empresa.`, v > c.patrimonio * 0.1); } }
+  if (f.aporte_do_dono > 0) { const v = Math.min(f.aporte_do_dono, Math.max(0, c.pessoal.caixa)); if (v >= 100) { c.pessoal.caixa -= v; c.caixa += v; c.capital = (c.capital || 0) + v; nota(j, c, true, `O dono põe ${reais(v)} do próprio bolso na empresa.`, v > c.patrimonio * 0.1); } }
   if (f.tomar_emprestimo > 0) {
     const v = c.recuperacao || !temNegocio(c) ? 0 : Math.min(f.tomar_emprestimo, limiteDeCredito(c));
     if (v >= 500) { c.divida += v; c.caixa += v; nota(j, c, true, `Toma ${reais(v)} emprestados a ${(jurosAoAno(j, c) * 100).toFixed(0)}% ao ano.`, v > c.patrimonio * 0.2); }
@@ -488,8 +540,60 @@ function executarPauta(j, c) {
     const feitos = Object.entries(porArea).map(([k, v]) => `${VALENCIAS[k].nome.split(' ')[0].toLowerCase()} ${reais(v)}`);
     if (feitos.length) nota(j, c, true, `Investe no mês: ${feitos.join(', ')}.`);
   } else if (p.agenda.some((a) => a.investimento > 0)) nota(j, c, false, 'Em recuperação judicial, a empresa não pode investir.');
+  // Apostas de crescimento: o resultado só aparece depois de gastar.
+  for (const a of p.apostas || []) {
+    const op = c.ops[a.negocio];
+    if (!op || op.unidades + op.fora < 1 || c.recuperacao) continue;
+    const v = Math.min(a.investimento, Math.max(0, c.caixa));
+    if (v < 50) continue;
+    c.caixa -= v;
+    const def = NEGOCIOS[a.negocio], u = op.unidades + op.fora;
+    op.fadiga ||= {};
+    const cansaco = op.fadiga[a.canal] || 0;
+    const escala = u * (def.receita / 12) * 0.03;
+    const efeito = afinidade(j, a.canal, a.negocio, a.abordagem) * (1 - Math.exp(-v / escala)) * (0.6 + 0.8 * sorte(j, `ap|${a.canal}|${a.negocio}`)) * (1 - 0.5 * cansaco) * (0.6 + 0.8 * op.qualidade);
+    op.publico = Math.min(2, (op.publico || 0) + 0.12 * efeito); op.impulso = (op.impulso || 1) * (1 + 0.1 * efeito);
+    op.fadiga[a.canal] = Math.min(1, cansaco + 0.25);
+    const clientes = Math.round(efeito * u * 220 * (0.85 + 0.3 * sorte(j, `apr|${a.canal}|${a.negocio}`)));
+    const alcance = Math.round(v * (6 + 30 * fixo(j, `alc|${a.canal}`)) * (0.8 + 0.4 * sorte(j, `alc|${a.canal}`)));
+    // Muita gente nova com produto fraco: a reclamação também se espalha.
+    const queixa = efeito > 0.8 && op.qualidade < 0.42;
+    if (queixa) c.reputacao = lim(c.reputacao - 0.03, 0, 1);
+    a.resultado = { alcance, clientes_novos: clientes };
+    (registroDoMes(j, c).apostas ||= []).push({ canal: a.canal, negocio: a.negocio, abordagem: a.abordagem, investimento: Math.round(v), alcance, clientes_novos: clientes });
+    nota(j, c, clientes * 25 > v, `${CANAIS[a.canal]} (${def.nome.toLowerCase()}, mensagem "${a.abordagem}"): ${reais(v)} → cerca de ${alcance.toLocaleString('pt-BR')} pessoas alcançadas e ${clientes} clientes novos${queixa ? '; vieram também reclamações públicas sobre a qualidade' : ''}.`);
+  }
   for (const m of p.movimentos) {
     const def = NEGOCIOS[m.negocio];
+    if (m.acao === 'comprar_anuncio') continue;          // resolvido para os três juntos, em mercadoDeNegocios
+    if (m.acao === 'auditar_anuncio') {
+      const an = (j.anuncios || []).find((x) => x.id === m.anuncio);
+      if (!an) nota(j, c, false, `Anúncio ${m.anuncio} não existe mais.`);
+      else if (c.caixa < 6_000) nota(j, c, false, 'Sem caixa para pagar a auditoria (R$ 6.000).');
+      else {
+        c.caixa -= 6_000;
+        const erro = (k) => 0.9 + 0.2 * sorte(j, `aud|${an.id}|${k}`);
+        nota(j, c, true, `Auditoria do anúncio ${an.id} (${NEGOCIOS[an.tipo].nome.toLowerCase()}, ${LOCAIS[an.local].nome}), R$ 6.000: receita mensal real perto de ${reais(an.receitaReal * erro('r'))} (anunciam ${reais(an.declarada)}); passivo trabalhista e fiscal estimado em ${reais(an.passivo * erro('p'))}; estado da operação: ${an.q > 0.6 ? 'bom' : an.q > 0.45 ? 'regular' : 'ruim'}.`);
+      }
+      continue;
+    }
+    if (m.acao === 'vender_empresa') {
+      const valor = valorDaEmpresa(j, c);
+      if (!temNegocio(c) || c.recuperacao || valor <= 0) { nota(j, c, false, c.recuperacao ? 'Em recuperação judicial, a empresa não pode ser vendida.' : 'Não apareceu comprador para a empresa.', true); continue; }
+      // O comprador faz a própria conta: a proposta fica entre 70% e 100% do valor estimado.
+      const preco = valor * (0.7 + 0.3 * sorte(j, 'venda-empresa'));
+      const ganho = Math.max(0, preco - (c.capital || 0)), ir = impostoGanhoDeCapital(ganho);
+      c.pessoal.caixa += preco - ir;
+      for (const op of Object.values(c.ops)) { op.unidades = 0; op.fora = 0; op.equipe = 0; op.lucros12 = []; op.efeitos = []; op.locais = {}; op.publico = 0; op.vendoPor = 0; }
+      c.caixa = 0; c.divida = 0; c.franqueados = 0; c.franquia = false; c.lucrosRetidos = 0; c.contratos = []; c.capital = 0; c.receitas12 = []; c.prejuizoFiscal = 0; c.pendencias = [];
+      // O que a empresa sabia fazer fica com ela; o dono leva parte do que aprendeu.
+      for (const v of Object.values(VALENCIAS)) c[v.campo] = v.inicio + (c[v.campo] - v.inicio) * 0.4;
+      c.empresasVendidas = (c.empresasVendidas || 0) + 1;
+      nota(j, c, true, `Vende a empresa inteira por ${reais(preco)} (valor estimado ${reais(valor)}); paga ${reais(ir)} de imposto sobre o ganho de capital e fica com ${reais(preco - ir)} no próprio nome.`, true);
+      registrar(j, `${c.nome} vende a empresa inteira por ${reais(preco)}.`, 'era', c.id);
+      c.marcos.push({ t: j.t, texto: `Vende a empresa por ${reais(preco)}` });
+      break;
+    }
     if (m.acao === 'lancar_franquia') {
       if (c.franquia) continue;
       if (unidadesDe(c, 'padaria') < FRANQUIA.requer.padarias || c.marca < FRANQUIA.requer.marca) nota(j, c, false, 'Franquia ainda não: exige 5 padarias próprias e marca forte (0,5).', true);
@@ -543,7 +647,7 @@ function executarPauta(j, c) {
   if (b.pagar_divida_pessoal > 0) { const v = Math.min(b.pagar_divida_pessoal, Math.max(0, pes.caixa), pes.divida); if (v >= 100) { pes.divida -= v; pes.caixa -= v; nota(j, c, true, `Bolso: paga ${reais(v)} da dívida pessoal.`); } }
   for (const [para, campo, nomeA] of [['aplicar_renda_fixa', 'rendaFixa', 'renda fixa'], ['aplicar_bolsa', 'bolsa', 'bolsa'], ['comprar_imoveis', 'imoveis', 'imóveis']]) { const v = Math.min(b[para], Math.max(0, pes.caixa)); if (v >= 100) { pes.caixa -= v; pes[campo] += v * (campo === 'imoveis' ? 0.96 : 1); nota(j, c, true, `Bolso: aplica ${reais(v)} em ${nomeA}.`, v > c.patrimonio * 0.2); } }
   // Tudo acima vale só para este mês; preço, salário, equipe ideal, pró-labore e seguro ficam.
-  c.pauta = { ...p, movimentos: [], operacoes: {}, respostas: [], agenda: [], financas: Object.fromEntries(Object.keys(f).map((k) => [k, 0])), bolso: Object.fromEntries(Object.keys(b).map((k) => [k, 0])), seguro: null, reposicao: null, proLabore: null };
+  c.pauta = { ...p, comprasDoMes: p.movimentos.filter((m) => m.acao === 'comprar_anuncio'), movimentos: [], operacoes: {}, respostas: [], agenda: [], apostas: [], financas: Object.fromEntries(Object.keys(f).map((k) => [k, 0])), bolso: Object.fromEntries(Object.keys(b).map((k) => [k, 0])), seguro: null, reposicao: null, proLabore: null };
 }
 
 function acoesExternas(j) {
@@ -640,6 +744,63 @@ function acoesExternas(j) {
   return efeitos;
 }
 
+// Negócios de terceiros à venda em Campinas e região. O anúncio mostra o que o
+// vendedor quer mostrar; a verdade (receita real, estado da operação, contas
+// escondidas) só aparece com auditoria ou depois da compra.
+const MOTIVOS = ['o dono vai se aposentar', 'a família vai mudar de cidade', 'os sócios brigaram', 'o dono quer investir em outro ramo', 'problemas de saúde na família', 'o dono diz que cansou'];
+function atualizarAnuncios(j) {
+  j.anuncios = (j.anuncios || []).filter((a) => a.ate > j.t + 1);
+  if (j.anuncios.length >= 5 || sorte(j, 'anuncio') > 0.55) return;
+  const S = (k) => sorte(j, `anuncio|${k}`);
+  const tipos = ['padaria', 'padaria', 'cafeteria', 'minimercado', 'restaurante', 'delivery'], tipo = tipos[Math.floor(S('tipo') * tipos.length)], def = NEGOCIOS[tipo];
+  const ids = Object.keys(LOCAIS), local = ids[Math.floor(S('local') * ids.length)];
+  const q = 0.3 + 0.45 * S('q'), ponto = 0.8 + 0.45 * S('ponto'), inflado = 1 + 0.4 * S('inf') ** 2;
+  const receitaReal = (def.receita / 12) * LOCAIS[local].renda * (j.cidade.renda / j.base.renda) * (0.55 + 0.9 * q) * ponto;
+  const declarada = Math.round(receitaReal * inflado / 100) * 100;
+  const pede = Math.round(declarada * 12 * (0.32 + 0.22 * S('pede')) / 1000) * 1000;
+  j.anuncios.push({
+    id: j.proxAnuncio++, tipo, local, pede, declarada, motivo: MOTIVOS[Math.floor(S('motivo') * MOTIVOS.length)], anos: 2 + Math.floor(S('anos') * 25), ate: j.t + 5,
+    q, ponto, receitaReal: Math.round(receitaReal), exp: 0.4 + 0.5 * S('exp'), minimo: Math.round(pede * (0.72 + 0.23 * S('min'))), passivo: S('pas') < 0.3 ? Math.round(pede * (0.08 + 0.3 * S('pas2'))) : 0,
+  });
+}
+const anuncioPublico = (a, j) => ({ anuncio: a.id, negocio: a.tipo, onde: a.local, pede: a.pede, receita_mensal_declarada: a.declarada, funcionarios: NEGOCIOS[a.tipo].func, anos_de_casa: a.anos, motivo_da_venda: a.motivo, meses_no_ar: a.ate - j.t });
+
+// Ofertas pelos anúncios: vale para os três ao mesmo tempo. Leva quem oferece mais; empate, o vendedor espera.
+function mercadoDeNegocios(j) {
+  const ofertas = {};
+  for (const c of ativos(j)) for (const m of c.pauta?.comprasDoMes || []) {
+    const an = (j.anuncios || []).find((x) => x.id === m.anuncio);
+    if (!an) { nota(j, c, false, `Anúncio ${m.anuncio} não existe mais.`); continue; }
+    if (c.recuperacao) { nota(j, c, false, 'Em recuperação judicial, não pode comprar negócios.', true); continue; }
+    if (m.oferta < an.minimo) { nota(j, c, false, `O vendedor do anúncio ${an.id} recusou ${reais(m.oferta)} (pede ${reais(an.pede)}).`, true); continue; }
+    if (Math.max(0, c.caixa) + limiteDeCredito(c) < m.oferta) { nota(j, c, false, `Oferta de ${reais(m.oferta)} pelo anúncio ${an.id} cai: sem caixa nem crédito para pagar.`, true); continue; }
+    (ofertas[an.id] ||= []).push({ c, valor: m.oferta });
+  }
+  for (const [id, lista] of Object.entries(ofertas)) {
+    const an = j.anuncios.find((x) => x.id === +id), maior = Math.max(...lista.map((o) => o.valor)), melhores = lista.filter((o) => o.valor === maior);
+    for (const o of lista) if (o.valor < maior) nota(j, o.c, false, `Perde o anúncio ${an.id} para uma oferta maior.`, true);
+    if (melhores.length > 1) { for (const o of melhores) nota(j, o.c, false, `Duas ofertas iguais pelo anúncio ${an.id}: o vendedor pediu uma nova rodada.`, true); continue; }
+    const { c, valor } = melhores[0], def = NEGOCIOS[an.tipo];
+    const doCaixa = Math.min(Math.max(0, c.caixa), valor);
+    c.caixa -= doCaixa; c.divida += valor - doCaixa;
+    const novo = unidadesDe(c, an.tipo) === 0;
+    c.ops[an.tipo] ||= novaOperacao(an.tipo);
+    const op = c.ops[an.tipo], n = op.unidades + op.fora;
+    op.qualidade = (op.qualidade * n + an.q) / (n + 1);
+    op.experiencia = lim((op.experiencia * op.equipe + an.exp * def.func) / Math.max(1, op.equipe + def.func), 0, 1);
+    op.locais[an.local] = (op.locais[an.local] || 0) + 1; op[LOCAIS[an.local].fora ? 'fora' : 'unidades']++; op.equipe += def.func;
+    if (novo) op.contrato = j.t;
+    // A clientela vem junto, para o bem ou para o mal, e vai se diluindo.
+    op.efeitos.push({ fator: 1 + (an.ponto - 1) / (n + 1), meses: 18, motivo: 'clientela herdada do negócio comprado' });
+    if (an.passivo > 0) (c.herdados ||= []).push({ em: j.t + 3 + Math.floor(sorte(j, `herd|${an.id}`) * 8), valor: an.passivo, onde: LOCAIS[an.local].nome });
+    c.pulsos = [...(c.pulsos || []).slice(-20), { t: j.t, local: an.local, tipo: 'abriu' }];
+    j.anuncios = j.anuncios.filter((x) => x !== an);
+    nota(j, c, true, `Compra ${def.nome.toLowerCase()} em ${LOCAIS[an.local].nome} por ${reais(valor)} (pediam ${reais(an.pede)}): leva o ponto, a equipe e a clientela.`, true);
+    registrar(j, `${c.nome} compra ${def.nome.toLowerCase()} em ${LOCAIS[an.local].nome} por ${reais(valor)}.`, 'bom', c.id);
+    if (novo) c.marcos.push({ t: j.t, texto: `Compra e entra em ${def.nome.toLowerCase()}` });
+  }
+}
+
 // O apelo de um negócio para o cliente: qualidade, marca, preço e, onde importa, tecnologia.
 const apelo = (c, op, cartel = 1) => Math.exp(1.5 * op.qualidade + 1.2 * c.marca + (NEGOCIOS[op.tipo].digital ? 1.2 * c.tecnologia : 0.3 * c.tecnologia) + 0.5 * c.produto + 0.4 * c.design + 0.4 * c.atendimento
   - (3 - 1.4 * c.design) * (op.preco * cartel - 1)) * Math.pow(0.4 + c.reputacao, 0.5);
@@ -675,7 +836,7 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
     const atendimento = lotacao * moral;
     const greve = op.salario < 0.85 && sorte(j, `greve:${op.tipo}`) < 0.05;
     const choques = op.efeitos.reduce((s, e) => s * e.fator, 1) * cidadeMes.vendas * ef.vendas * (greve ? 0.6 : 1);
-    const base = (def.receita / 12) * renda * Math.pow(rel, 0.85) * SAZONAL[mes] * digital * atendimento * folga * choques * (0.94 + 0.2 * c.vendas);
+    const base = (def.receita / 12) * renda * Math.pow(rel, 0.85) * SAZONAL[mes] * digital * atendimento * folga * choques * (0.94 + 0.2 * c.vendas) * (1 + 0.22 * Math.min(1.5, op.publico || 0)) * (op.impulso || 1);
     const limite = u * (def.receita / 12) * renda * 1.4 * atendimento * SAZONAL[mes] * (0.895 + 0.3 * c.operacoes);
     const volume = Math.min(limite, base * pontos);
     const rec = volume * op.preco * ef.cartel;
@@ -687,6 +848,9 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
     receita += rec; insumos += ins; folha += fol; alugueis += alu; fixos += fix; funcionarios += op.equipe;
     if (greve) { nota(j, c, false, `Greve por salários em ${def.nome.toLowerCase()}: mês com 40% menos vendas.`); evento(j, c, `Greve em ${def.nome.toLowerCase()}: salário abaixo do mercado.`); }
     op.efeitos = op.efeitos.filter((e) => --e.meses > 0);
+    // Cliente conquistado se perde aos poucos; o canal descansa quando não é usado.
+    op.publico = (op.publico || 0) * 0.94; op.impulso = 1;
+    for (const k of Object.keys(op.fadiga || {})) { op.fadiga[k] -= 0.1; if (op.fadiga[k] <= 0) delete op.fadiga[k]; }
     // A equipe ganha experiência com o tempo de casa.
     op.experiencia = lim(op.experiencia + 0.02 * (1 - op.experiencia), 0, 1);
   }
@@ -705,6 +869,7 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
   c.receitas12 = [...c.receitas12.slice(-11), receita];
   const r12 = receita12(c), simples = r12 <= REGRAS.simplesTeto;
   const encargos = folha * lim((simples ? REGRAS.encargosSimples : REGRAS.encargos) + F.encargos, 0.2, 0.9) * ef.encargos;
+  const presumido = !simples && r12 <= REGRAS.presumidoTeto;
   const tribVendas = (simples ? receita * aliquotaSimples(r12) : anoDe(j) < REGRAS.anoIVA ? receita * REGRAS.tributoVendas : Math.max(0, receita - insumos) * REGRAS.iva * REGRAS.ivaAlimentos) * ef.tributo * (1.03 - 0.1 * c.contabilidade);
   // Em recuperação judicial as dívidas ficam suspensas: não correm juros.
   const juros = c.recuperacao ? 0 : (c.divida * jurosAoAno(j, c)) / 12;
@@ -714,12 +879,13 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
   const rendeCaixa = Math.max(0, c.caixa) * (j.juros / 12) * c.financas * 0.8;        // tesouraria: caixa parado rende
   const base = receita + rendeCaixa - insumos - folha - encargos - alugueis - fixos - tribVendas - premio - juros - proLabore - inssEmpresa;
   let ir = 0;
-  if (!simples) { if (base > 0) { const abate = Math.min(c.prejuizoFiscal, base * 0.3); c.prejuizoFiscal -= abate; ir = (base - abate) * (REGRAS.irpj + F.irpj); } else c.prejuizoFiscal += -base; }
+  if (presumido) ir = (receita * REGRAS.presIRPJ * REGRAS.irpjBase + Math.max(0, receita * REGRAS.presIRPJ - REGRAS.adicionalAcima) * REGRAS.irpjAdicional + receita * REGRAS.presCSLL * REGRAS.csll) * (1 + F.irpj / REGRAS.irpj) * ef.tributo;
+  else if (!simples) { if (base > 0) { const abate = Math.min(c.prejuizoFiscal, base * 0.3); c.prejuizoFiscal -= abate; ir = (base - abate) * (REGRAS.irpj + F.irpj); } else c.prejuizoFiscal += -base; }
   const lucro = base - ir;
   c.caixa += lucro; c.lucrosRetidos += lucro;
   const antigo = c.regime;
-  c.regime = simples ? 'Simples Nacional' : 'Lucro real';
-  if (antigo !== c.regime) { nota(j, c, simples, simples ? 'Volta ao Simples Nacional.' : 'A receita de 12 meses passa de R$ 4,8 milhões: sai do Simples, com imposto e encargos bem maiores.', true); if (!simples) c.marcos.push({ t: j.t, texto: 'Sai do Simples Nacional' }); }
+  c.regime = simples ? 'Simples Nacional' : presumido ? 'Lucro presumido' : 'Lucro real';
+  if (antigo !== c.regime) { nota(j, c, simples, simples ? 'Volta ao Simples Nacional.' : antigo === 'Simples Nacional' ? 'A receita de 12 meses passa de R$ 4,8 milhões: sai do Simples, com imposto e encargos bem maiores.' : `Muda de regime: ${c.regime.toLowerCase()}.`, true); if (antigo === 'Simples Nacional') c.marcos.push({ t: j.t, texto: 'Sai do Simples Nacional' }); }
   for (const op of Object.values(c.ops)) {
     const x = porOp[op.tipo];
     if (!x) { if (op.unidades + op.fora === 0) op.lucros12 = []; continue; }
@@ -731,7 +897,7 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
   // O bolso do dono: pró-labore líquido, custo de vida, rendimentos.
   const pes = c.pessoal, vida = custoDeVida(j);
   const inss = Math.min(proLabore * REGRAS.inssProLabore, REGRAS.tetoInss * (cid.renda / j.base.renda));
-  const irpf = Math.max(0, proLabore - inss - REGRAS.isentoIRPF * (cid.renda / j.base.renda)) * 0.2;
+  const irpf = irpfMensal(proLabore, inss, cid.renda / j.base.renda);
   const ganhoRF = pes.rendaFixa * (j.juros / 12) * (1 - REGRAS.irAplicacao);
   const ganhoBolsa = pes.bolsa * j.bolsaMes * (j.bolsaMes > 0 ? 1 - REGRAS.irAplicacao : 1);
   const aluguelRecebido = (pes.imoveis * 0.05) / 12 * (1 - REGRAS.irAplicacao);
@@ -774,7 +940,7 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
     if (c.caixa < 0 || anual < 0) {
       // Falência da empresa: os negócios acabam, as dívidas dela também. O dono segue com o que tem no bolso.
       for (const op of Object.values(c.ops)) { op.unidades = 0; op.fora = 0; op.equipe = 0; op.lucros12 = []; op.efeitos = []; op.locais = {}; }
-      c.caixa = 0; c.divida = 0; c.franqueados = 0; c.franquia = false; c.lucrosRetidos = 0; c.contratos = []; c.falencias++; c.reputacao = 0.3; c.marca = 0.2;
+      c.caixa = 0; c.divida = 0; c.franqueados = 0; c.franquia = false; c.lucrosRetidos = 0; c.contratos = []; c.capital = 0; c.falencias++; c.reputacao = 0.3; c.marca = 0.2;
       nota(j, c, false, 'Falência da empresa decretada. Os negócios fecham. O dono fica com o que tem no próprio nome e pode recomeçar.', true);
       registrar(j, `A empresa de ${c.nome} vai à falência.`, 'guerra', c.id);
       c.marcos.push({ t: j.t, texto: 'Falência da empresa' });
@@ -792,7 +958,10 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
 // ---------- o acaso do mês seguinte ----------
 
 function sortearEventos(j, c) {
-  if (c.quebrou || !temNegocio(c)) return;
+  if (c.quebrou) return;
+  for (const h of (c.herdados || []).filter((x) => x.em <= j.t + 1)) { c.caixa -= h.valor; evento(j, c, `Apareceu uma conta antiga do negócio comprado em ${h.onde}: ${reais(h.valor)} em ações trabalhistas e impostos atrasados do dono anterior.`); }
+  c.herdados = (c.herdados || []).filter((x) => x.em > j.t + 1);
+  if (!temNegocio(c)) return;
   const F = fed(j), M = mun(j), cid = j.cidade, sal = salarioMensal(j);
   const pend = (tipo, txt, opcoes, dados = {}) => { c.pendencias.push({ id: c.proxPendencia++, tipo, texto: txt, opcoes, ...dados }); evento(j, c, txt); };
   const ops = Object.values(c.ops).filter((o) => o.unidades + o.fora > 0);
@@ -865,6 +1034,8 @@ export function avancarMes(j) {
   j.ocupNoMes = Object.fromEntries(Object.keys(NEGOCIOS).map((t) => [t, ocupacao(j, t)]));
   for (const c of ativos(j)) executarPauta(j, c);
   delete j.ocupNoMes;
+  mercadoDeNegocios(j);
+  for (const c of ativos(j)) if (c.pauta) c.pauta.comprasDoMes = [];
   const efeitos = acoesExternas(j);
   const neutro = { vendas: 1, tributo: 1, encargos: 1, fixo: 1, cartel: 1 };
   const foto0 = Object.fromEntries(ativos(j).map((c) => [c.id, Object.fromEntries(Object.values(c.ops).map((op) => [op.tipo, apelo(c, op, (efeitos[c.id] || neutro).cartel)]))]));
@@ -894,6 +1065,7 @@ export function avancarMes(j) {
     for (const ev of j.cen.eventos.filter((e) => e.tipo === 'recessao' || e.tipo === 'boom' || e.tipo === 'lei')) { registrar(j, ev.texto, ev.tipo); for (const c of ativos(j)) evento(j, c, ev.texto); }
   }
   for (const c of ativos(j)) sortearEventos(j, c);
+  atualizarAnuncios(j);
   j.t++;
   for (const c of j.ceos) c.hist.push(ponto(j, c));
 }
@@ -922,6 +1094,8 @@ export function ceoPorRegras(j, c, perfil = 'padeiro') {
   const somaPesos = Object.values(pesos).reduce((s, v) => s + v, 0) || 1;
   d.agenda = Object.entries(pesos).map(([area, peso], i) => ({ dia: 2 + i * 3, area, acao: '', investimento: (livre * 0.4 * P.reinveste * peso) / somaPesos }));
   Object.assign(d.gestao, { seguro: mensal > 80_000, reposicao_de_pessoal: 'automatica' });
+  // Divulgação: o jogador de regras só roda os canais em sequência, sem aprender com o resultado.
+  { const canais = Object.keys(CANAIS), ops = Object.values(c.ops).filter((o) => o.unidades + o.fora > 0).sort((x, y) => y.receita - x.receita); if (ops[0] && livre > 0 && perfil !== 'inercia') d.apostas = [{ canal: canais[j.t % canais.length], negocio: ops[0].tipo, abordagem: ABORDAGENS[Math.floor(j.t / canais.length) % ABORDAGENS.length], investimento: Math.min(livre * 0.1, ops[0].receita * 0.02) }]; }
   d.financas.pro_labore = Math.round(custoDeVida(j) * 1.15);
   if (c.pessoal.divida > 0 && c.lucrosRetidos > 0 && c.caixa > reserva) d.financas.distribuir_lucros = Math.min(c.pessoal.divida * 1.1, c.caixa - reserva);
   const sobra = livre * 3 * (1 - 0.52 * P.reinveste);

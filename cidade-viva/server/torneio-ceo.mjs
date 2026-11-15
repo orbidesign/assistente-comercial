@@ -13,11 +13,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, temTokens, registrarTokens, terminou, classificacao, bensPessoais, reais, CEOS, VALENCIAS, TOKENS_SECULO } from '../src/empresas/jogo.js';
+import { criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, temTokens, registrarTokens, terminou, classificacao, bensPessoais, reais, CEOS, VALENCIAS, TOKENS_JOGO } from '../src/empresas/jogo.js';
 import { PROVEDORES, ativo, decidir } from './provedores.mjs';
 
 const arg = (nome, padrao) => { const i = process.argv.indexOf(`--${nome}`); return i > 0 ? process.argv[i + 1] : padrao; };
-const modo = arg('modo', 'solo'), nSementes = +arg('sementes', 3), ateAno = +arg('ate', 2126);
+const modo = arg('modo', 'solo'), nSementes = +arg('sementes', 3), ateAno = +arg('ate', 2076);
 const sementes = Array.from({ length: nSementes }, (_, i) => 1001 + i * 7919);
 const REFERENCIAS = ['padeiro', 'expansionista', 'diversificador', 'inercia'];
 const comChave = Object.keys(PROVEDORES).filter(ativo);
@@ -55,7 +55,7 @@ const medir = (j, c, quem, semente, lugar) => ({
 
 const resultados = [];
 console.log(`Torneio ${modo}: ${nSementes} sementes, mês a mês de 2026 a ${ateAno} · ${modo === 'arena' ? Object.keys(CEOS).map((id) => (ativo(id) ? id : `${id} (regras: ${CEOS[id].perfil})`)).join(', ') : competidores.join(', ')}`);
-console.log(`Verba por IA por partida: ${TOKENS_SECULO.toLocaleString('pt-BR')} tokens.\n`);
+console.log(`Verba por IA por partida: ${TOKENS_JOGO.toLocaleString('pt-BR')} tokens.\n`);
 for (const semente of sementes) {
   if (modo === 'arena') {
     const j = await partida(semente, Object.keys(CEOS), (c) => (ativo(c.id) ? c.id : 'perfil'));

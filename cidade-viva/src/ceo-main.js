@@ -3,13 +3,13 @@
 // e Campinas em 3D com as unidades de cada marca.
 import {
   criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, temTokens, registrarTokens, terminou, vencedor, classificacao, composicao, bensPessoais, valorDaEmpresa, salarioMensal, locaisDe, dataDe, ceo as ceoDe, reais,
-  CEOS, NEGOCIOS, ACOES, VALENCIAS, EVENTOS, GOVERNO, TOKENS_SECULO, CAIXA_INICIAL, MESES,
+  CEOS, NEGOCIOS, ACOES, VALENCIAS, EVENTOS, GOVERNO, CANAIS, TOKENS_JOGO, CAIXA_INICIAL, MESES,
 } from './empresas/jogo.js';
 import { LOCAIS } from './empresas/campinas.js';
 import { criarMapa } from './mapa.js';
 import { desenharLinhas, desenharMini } from './graficos.js';
 
-const CHAVE = 'cidade-viva-ceo-v2';
+const CHAVE = 'cidade-viva-ceo-v3';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const mil = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)} mi` : `${Math.round(n / 1000)} mil`);
@@ -134,7 +134,8 @@ function abaMicro(c) {
     if (d.respostas.length) h += `<h4>Respostas às pendências</h4>${d.respostas.map((x) => `<div><b>${esc(x.opcao.replace(/_/g, ' '))}</b></div>${porque(x.justificativa)}`).join('')}`;
     const ops = Object.entries(d.operacoes);
     if (ops.length) h += `<h4>Operação de cada negócio</h4>${ops.map(([t, o]) => `<div><b>${esc(NEGOCIOS[t].nome)}</b>: ${[Number.isFinite(+o.preco) && `preço ${(+o.preco).toFixed(2)}`, Number.isFinite(+o.salario) && `salário ${Math.round(o.salario * 100)}% do mercado`, Number.isFinite(+o.func) && `${(+o.func).toFixed(1)} pessoas por unidade`, o.contratar > 0 && `contratar ${o.contratar}`, o.demitir > 0 && `demitir ${o.demitir}`, o.qualidade > 0 && `${reais(o.qualidade)} em qualidade`, o.vendoPor > 0 && `aceita vender por ${reais(o.vendoPor)}`].filter(Boolean).join(' · ') || 'sem mudança'}</div>${porque(o.justificativa)}`).join('')}`;
-    if (d.movimentos.length) h += `<h4>Movimentos</h4>${d.movimentos.map((m) => `<div><b>${esc(m.acao.replace(/_/g, ' '))}</b> ${m.acao === 'lancar_franquia' ? '' : `${m.quantidade} × ${esc(NEGOCIOS[m.negocio].nome.toLowerCase())}${m.onde === 'fora' ? ' fora de Campinas' : ''}`}</div>${porque(m.justificativa)}`).join('')}`;
+    if (d.apostas?.length) h += `<h4>Apostas de crescimento (tentativa e erro)</h4>${d.apostas.map((a) => `<div><b>${esc(CANAIS[a.canal])}</b>, mensagem “${esc(a.abordagem)}”, ${reais(a.investimento)}${a.resultado ? ` → ${a.resultado.alcance.toLocaleString('pt-BR')} alcançados, <b>${a.resultado.clientes_novos} clientes novos</b>` : ''}</div>${a.justificativa ? `<div class="porque">${esc(a.justificativa)}</div>` : ''}`).join('')}`;
+    if (d.movimentos.length) h += `<h4>Movimentos</h4>${d.movimentos.map((m) => `<div><b>${esc(m.acao.replace(/_/g, ' '))}</b> ${['comprar_anuncio', 'auditar_anuncio'].includes(m.acao) ? `nº ${m.anuncio}${m.oferta ? `, oferta de ${reais(m.oferta)}` : ''}` : ['lancar_franquia', 'vender_empresa'].includes(m.acao) ? '' : `${m.quantidade} × ${esc(NEGOCIOS[m.negocio].nome.toLowerCase())}${m.onde === 'fora' ? ' fora de Campinas' : ''}`}</div>${porque(m.justificativa)}`).join('')}`;
     if (d.gestao.justificativa || d.gestao.seguro !== null) h += `<h4>Seguro e reposição de pessoal</h4><div>${d.gestao.seguro === null ? '' : d.gestao.seguro ? 'Com seguro. ' : 'Sem seguro. '}${d.gestao.reposicao_de_pessoal ? `Reposição ${esc(d.gestao.reposicao_de_pessoal)}.` : ''}</div>${porque(d.gestao.justificativa)}`;
     h += tabela('Finanças da empresa', d.financas) + tabela('O bolso do dono', d.bolso);
     if (d.acoes_externas.length) h += `<h4>Contra os rivais e o Estado</h4>${d.acoes_externas.map((a) => `<div><b>${esc(ACOES[a.tipo].nome)}</b>${a.alvo ? ` → ${esc(a.alvo)}` : ''}${a.recursos ? ` · ${reais(a.recursos)}` : ''} <span class="rot">(${esc(ACOES[a.tipo].lei)})</span></div>${porque(a.justificativa)}`).join('')}`;
@@ -165,7 +166,7 @@ function abaComparar() {
   ];
   return `<table><tr><th></th>${cs.map((c) => `<th style="color:${CEOS[c.id].cor}">${c.nome}</th>`).join('')}</tr>
     ${linhas.map(([k, fn]) => `<tr><td>${k}</td>${f(fn)}</tr>`).join('')}
-    <tr><td>Tokens usados (de ${mil(TOKENS_SECULO)})</td>${cs.map((c) => `<td>${mil(c.tokens)}</td>`).join('')}</tr>
+    <tr><td>Tokens usados (de ${mil(TOKENS_JOGO)})</td>${cs.map((c) => `<td>${mil(c.tokens)}</td>`).join('')}</tr>
     <tr><td>Despachos pagos / respostas inválidas</td>${cs.map((c) => `<td>${c.chamadas} / ${c.invalidas}</td>`).join('')}</tr></table>
     <div class="rot" style="margin-top:6px">Governo federal: ${j.politica.federal.lado} · Prefeitura: ${j.politica.municipal.lado} · Campinas: ${Math.round(j.cidade.pop).toLocaleString('pt-BR')} habitantes · salário de mercado ${reais(salarioMensal(j))} · trigo ${j.trigo.toFixed(2)} · juros ${(j.juros * 100).toFixed(1)}% ao ano</div>`;
 }
@@ -209,11 +210,14 @@ function desenharPainel() {
 
 function abaRegras() {
   return `<h3>Como funciona</h3>
-    Claude, Grok e Gemini começam <b>exatamente iguais</b> em janeiro de 2026: uma padaria de bairro em Campinas, 8 funcionários e ${reais(CAIXA_INICIAL)} no caixa da empresa. O jogo anda <b>mês a mês</b> até dezembro de 2125. Vence o <b>maior patrimônio pessoal</b>: o que está no nome do dono mais o valor da empresa.<br><br>
+    Claude, Grok e Gemini começam <b>exatamente iguais</b> em janeiro de 2026: uma padaria de bairro em Campinas, 8 funcionários e ${reais(CAIXA_INICIAL)} no caixa da empresa. O jogo anda <b>mês a mês</b> por <b>50 anos</b>, até dezembro de 2075, e sempre vai até o fim. Vence o <b>maior patrimônio pessoal</b>: o que está no nome do dono mais o valor da empresa. Fracassar ou estagnar são desfechos possíveis.<br><br>
+    <b>Sem manual.</b> As IAs não recebem as fórmulas nem dicas do que funciona. Recebem as leis, os preços de mercado, os números do mês e o retorno do que tentaram. O que rende em cada canal de divulgação, o que há por trás de cada negócio anunciado e quanto um comprador paga pela empresa só se descobre tentando.<br><br>
     <b>Todo mês</b> cada empresário recebe um relatório e despacha: conta como foi o mês, entrega a <b>agenda dia a dia</b> (cada ação com data, área e dinheiro), responde ao que aconteceu e decide preço, salários, contratações, pró-labore, crédito, expansão e o que faz com o próprio dinheiro. Tudo fica registrado com a justificativa.<br><br>
     <b>Empresa e bolso são separados.</b> O dono vive do pró-labore; pode distribuir lucro ou pôr dinheiro seu na empresa. Se a empresa quebra, ele fica com o que tem no nome e pode recomeçar.<br><br>
-    <b>Batalha justa.</b> Mesma cidade, mesmos eventos e <b>os mesmos sorteios</b> para os três: o que muda é o quanto cada um se preparou. Mesmo texto de regras, mesmo tipo de relatório, despachos simultâneos e a mesma verba de <b>${mil(TOKENS_SECULO)} de tokens</b>.
-    <h4>Valências da empresa (todas começam iguais)</h4>${Object.values(VALENCIAS).map((v) => `<div><b>${esc(v.nome)}</b>: ${esc(v.efeito)}.</div>`).join('')}
+    <b>Batalha justa.</b> Mesma cidade, mesmos eventos e <b>os mesmos sorteios</b> para os três: o que muda é o quanto cada um se preparou. Mesmo texto de regras, mesmo tipo de relatório, despachos simultâneos e a mesma verba de <b>${mil(TOKENS_JOGO)} de tokens</b>.
+    <h4>Canais de divulgação (o efeito é oculto e muda com o negócio, a mensagem e a época)</h4><div>${Object.values(CANAIS).map(esc).join(' · ')}</div>
+    <h4>Negócios à venda agora</h4>${(j.anuncios || []).map((a) => `<div>nº ${a.id}: <b>${esc(NEGOCIOS[a.tipo].nome)}</b> em ${esc(LOCAIS[a.local].nome)}, pedem ${reais(a.pede)}, dizem faturar ${reais(a.declarada)} por mês (${esc(a.motivo)}). <span class="rot">Só você vê: fatura de verdade ${reais(a.receitaReal)}, aceita ${reais(a.minimo)}, conta escondida ${reais(a.passivo)}.</span></div>`).join('') || '<div class="rot">nenhum anúncio no momento</div>'}
+    <h4>Valências da empresa (todas começam iguais; isto as IAs não leem)</h4>${Object.values(VALENCIAS).map((v) => `<div><b>${esc(v.nome)}</b>: ${esc(v.efeito)}.</div>`).join('')}
     <h4>O acaso do dia a dia</h4><table>${Object.values(EVENTOS).map((e) => `<tr><td><b>${esc(e.nome)}</b><br>${esc(e.texto)}</td><td>${e.chance < 1 ? `${(e.chance * 100).toFixed(1).replace('.0', '')}% ao mês<br>por ${esc(e.base)}` : esc(e.base)}</td></tr>`).join('')}</table>
     <h4>Quem governa muda o jogo</h4>
     <div><b>Federal, esquerda:</b> ${esc(GOVERNO.federal.esquerda.texto)}.</div><div><b>Federal, direita:</b> ${esc(GOVERNO.federal.direita.texto)}.</div>
@@ -342,7 +346,7 @@ async function mes() {
   if (terminou(j) && !fim) {
     fim = true; salvar();
     const v = vencedor(j);
-    faixa(v.ceo ? 'Maior patrimônio em dezembro de 2125' : 'Fim', v.ceo ? `${v.ceo.nome} vence com ${reais(v.ceo.patrimonio)}` : 'Todos quebraram');
+    faixa(v.ceo ? 'Maior patrimônio em dezembro de 2075' : 'Fim', v.ceo ? `${v.ceo.nome} vence com ${reais(v.ceo.patrimonio)}` : 'Todos quebraram');
   }
 }
 

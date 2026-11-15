@@ -2,7 +2,7 @@
 // a mesma situação, e devolve { texto, entrada, saida } (tokens cobrados).
 // Modelos e preços vêm de variáveis de ambiente, porque mudam com frequência.
 import Anthropic from '@anthropic-ai/sdk';
-import { NEGOCIOS, FRANQUIA, EVENTOS, ACOES, GOVERNO, VALENCIAS } from '../src/empresas/jogo.js';
+import { NEGOCIOS, FRANQUIA, ACOES, VALENCIAS, CANAIS, ABORDAGENS } from '../src/empresas/jogo.js';
 import { LOCAIS } from '../src/empresas/campinas.js';
 
 const env = process.env;
@@ -133,14 +133,15 @@ Responda apenas com um objeto JSON, sem texto fora dele, com exatamente estes ca
   "proxima_reuniao_anos": daqui a quantos anos você volta a se reunir (5 a 50, em múltiplos de 5)
 }`;
 
-// ---------- o empresário: da padaria de bairro em Campinas, mês a mês, até 2125 ----------
+// ---------- o empresário: da padaria de bairro em Campinas, mês a mês, até 2075 ----------
 
 const txt = { type: 'string' }, n = { type: 'number' }, int = { type: 'integer' }, bool = { type: 'boolean' };
 const ESQUEMA_CEO = obj({
   diario: txt, estrategia: txt,
   respostas: { type: 'array', items: obj({ id: int, opcao: txt, justificativa: txt }) },
   operacoes: { type: 'array', items: obj({ negocio: txt, preco_indice: n, salario_indice: n, funcionarios_por_unidade: n, contratar: int, demitir: int, investir_em_qualidade: n, vendo_por: n, justificativa: txt }) },
-  movimentos: { type: 'array', items: obj({ acao: { type: 'string', enum: ['abrir', 'fechar', 'vender', 'lancar_franquia'] }, negocio: txt, quantidade: int, onde: txt, justificativa: txt }) },
+  movimentos: { type: 'array', items: obj({ acao: { type: 'string', enum: ['abrir', 'fechar', 'vender', 'lancar_franquia', 'vender_empresa', 'comprar_anuncio', 'auditar_anuncio'] }, negocio: txt, quantidade: int, onde: txt, anuncio: int, oferta: n, justificativa: txt }) },
+  apostas: { type: 'array', items: obj({ canal: txt, negocio: txt, abordagem: txt, investimento: n, justificativa: txt }) },
   agenda: { type: 'array', items: obj({ dia: int, area: { type: 'string', enum: Object.keys(VALENCIAS) }, acao: txt, investimento: n }) },
   gestao: obj({ seguro: bool, reposicao_de_pessoal: { type: 'string', enum: ['manual', 'automatica'] }, justificativa: txt }),
   financas: obj({ pro_labore: n, distribuir_lucros: n, aporte_do_dono: n, tomar_emprestimo: n, amortizar_divida: n, justificativa: txt }),
@@ -152,88 +153,62 @@ const ESQUEMA_CEO = obj({
 const R$ = (v) => `R$ ${v.toLocaleString('pt-BR')}`;
 // As regras fixas do mundo ficam aqui, no texto de sistema, iguais para os três;
 // o dossiê de cada mês traz só o que muda.
-export const SISTEMA_CEO = `Você é um empresário em Campinas (SP). Em janeiro de 2026 você tem uma padaria de bairro, 8 funcionários e R$ 20 mil no caixa da empresa. Dois rivais, cada um comandado por outra inteligência artificial, começam exatamente iguais. O jogo anda mês a mês até dezembro de 2125. Vence quem tiver o maior patrimônio pessoal: o que está no seu nome (conta, aplicações, imóveis, menos dívidas) mais o valor da sua empresa.
+export const SISTEMA_CEO = `Você é dono de uma padaria de bairro em Campinas (SP). É janeiro de 2026: 8 funcionários e R$ 20 mil no caixa da empresa. Há outros dois donos de padaria na cidade na mesma situação que você.
 
-Todo mês você recebe um relatório e despacha. É a vida de um empresário de verdade: pagar as contas, segurar a equipe, reagir ao que acontece e decidir como crescer. Valores em reais, a preços de 2026.
+Todo mês você recebe um relatório do seu negócio e decide o que fazer. Isso segue, mês a mês, até dezembro de 2075. No fim, o que conta é o seu patrimônio pessoal: o que está no seu nome (conta, aplicações, imóveis, menos dívidas) mais o valor da sua empresa. Ninguém garante que dá certo. Valores em reais, a preços de 2026.
 
-EMPRESA E BOLSO SÃO SEPARADOS
-- Você vive do pró-labore que define (desconta 11% de INSS e imposto de renda acima de R$ 5 mil). Se ele não cobre o seu custo de vida, a diferença vira dívida pessoal a 3,5% ao mês.
-- Lucro acumulado pode ser distribuído para o seu bolso (isento até R$ 50 mil por mês; 10% acima disso). Você também pode pôr dinheiro seu na empresa (aporte).
-- No bolso você aplica em renda fixa (juros reais do ano), bolsa (média de 6,5% ao ano, com meses de queda forte) e imóveis (aluguel de 5% ao ano e valorização).
-- Se a empresa quebrar, você fica com o que tem no próprio nome e pode recomeçar. Você só sai do jogo se as suas dívidas superarem tudo o que tem.
+Ninguém vai explicar o que funciona. Você tem o que qualquer dono de negócio tem: os números do mês, o que aconteceu, o retorno do que tentou e a sua memória. O resto se descobre tentando, medindo e corrigindo.
 
-AS VALÊNCIAS DA EMPRESA
-Sua empresa tem ${Object.keys(VALENCIAS).length} áreas, cada uma com um nível de 0 a 1. Todas começam medianas e iguais às dos rivais: ninguém nasce melhor em nada. Você decide onde ficar forte. Dinheiro posto em uma área (pela agenda) sobe o nível, com retorno cada vez menor; sem cuidado, a área volta devagar ao piso. Empresa maior precisa de mais dinheiro para o mesmo ganho.
-${Object.entries(VALENCIAS).map(([k, v]) => `- ${k} (${v.nome}): ${v.efeito}.`).join('\n')}
+O QUE É PÚBLICO (leis e mercado)
+- Empresa e bolso são separados. Você vive do pró-labore: desconta 11% de INSS (até o teto) e imposto de renda pela tabela (zero até R$ 5 mil por mês). Lucro distribuído ao dono é isento até R$ 50 mil por mês; acima disso, 10% na fonte. Faltando dinheiro no bolso, a diferença vira dívida pessoal a juros de cartão.
+- Simples Nacional: receita dos últimos 12 meses até R$ 4,8 milhões, de 4% a 19% da receita conforme a faixa. Acima disso, lucro presumido (até R$ 78 milhões) ou lucro real, com encargos maiores sobre a folha. A partir de 2033, IVA no lugar dos tributos sobre vendas.
+- Vender a empresa inteira: o ganho paga imposto de 15% a 22,5%, e o dinheiro vai para o seu nome.
+- Demitir custa perto de 25% do salário anual da pessoa. Salário não pode ficar abaixo do mínimo.
+- Sem caixa e sem crédito, a empresa entra em recuperação judicial (Lei 11.101/2005) e pode falir. Se falir, você fica com o que está no seu nome e pode recomeçar. Você só sai de cena se as suas dívidas pessoais superarem tudo o que tem.
+- Eleições: federal em outubro de 2026, 2030...; municipal em 2028, 2032... Governos mudam impostos, fiscalização e incentivos.
+- No bolso dá para aplicar em renda fixa, bolsa e imóveis.
 
-COMO UM NEGÓCIO VENDE
-Vendas dependem da qualidade de cada negócio, das valências acima, do preço (1 é o preço comum do mercado), de equipe completa e experiente e do salário (abaixo do mercado o atendimento piora, pode dar greve e mais gente pede para sair). Dezembro vende mais, janeiro e fevereiro menos. Campinas satura: muitas unidades do mesmo negócio dividem a clientela; fora de Campinas não satura tão cedo, mas exige mais gestão.
+NEGÓCIOS QUE EXISTEM (orçamento médio para abrir uma unidade do zero)
+${Object.entries(NEGOCIOS).map(([t, d]) => `- ${t}: ${d.nome}. Cerca de ${R$(d.capex)}; equipe de ${d.func}.`).join('\n')}
+- franquia da sua marca: lançar custa cerca de ${R$(FRANQUIA.lancamento)}.
+Alguns exigem porte ou preparo que você pode não ter; se não puder, o retorno das suas ordens dirá por quê. Você pode ter vários negócios ao mesmo tempo, vender um deles, vender a empresa inteira e começar outra, ou comprar negócios prontos de terceiros (veja "negocios_a_venda" no relatório: o anúncio é o que o vendedor diz; uma auditoria custa R$ 6.000).
 
-LUGARES
-Cada unidade fica em um lugar do mapa real. O lugar muda a venda (renda do bairro), o aluguel e quantas unidades do mesmo negócio cabem antes de dividir a clientela (somando as suas e as dos rivais). Em "onde" use o id de um lugar; "campinas" ou "fora" deixam o jogo escolher o melhor lugar livre. Lugares marcados com * ficam fora de Campinas.
-id (renda, aluguel, cabem): ${Object.entries(LOCAIS).map(([id, l]) => `${id}${l.fora ? '*' : ''} (${l.renda}, ${l.aluguel}, ${l.gente})`).join('; ')}.
+LUGARES (id: renda do público, custo do aluguel, tamanho do mercado, em índices; * fica fora de Campinas)
+${Object.entries(LOCAIS).map(([id, l]) => `${id}${l.fora ? '*' : ''}: ${l.renda}, ${l.aluguel}, ${l.gente}`).join('; ')}.
 
-O jogo sempre vai até dezembro de 2125. Não há prêmio por crescer primeiro nem por sobrar sozinho: vale só o seu patrimônio pessoal no fim. Fracassar, estagnar ou ficar com uma padaria só são desfechos possíveis.
+ÁREAS DA EMPRESA (para a agenda)
+${Object.entries(VALENCIAS).map(([k, v]) => `${k} (${v.nome})`).join('; ')}.
 
-A AGENDA: O DIA A DIA
-Em cada despacho você entrega a agenda do mês: de 4 a 12 ações datadas (dia de 1 a 30), cada uma em uma área, com o que fez e quanto investiu (pode ser zero). É o seu registro diário, e é por ela que o dinheiro chega às valências. Exemplos de ações do dia a dia:
-- dia 3, compras: "Fechei farinha com o moinho por seis meses, preço travado", investimento 800
-- dia 5, pessoas: "Treinei a atendente nova no caixa e na vitrine", investimento 300
-- dia 8, marketing: "Fotos da fornada das 6h no Instagram e panfleto no prédio da esquina", investimento 500
-- dia 11, financas: "Conciliei a maquininha e renegociei a taxa do cartão", investimento 0
-- dia 14, design: "Troquei a vitrine e a iluminação do balcão", investimento 2500
-- dia 17, vendas: "Visitei três escritórios do bairro oferecendo café da manhã por assinatura", investimento 200
-- dia 20, produto: "Testei pão de fermentação natural aos sábados", investimento 600
-- dia 23, manutencao: "Revisão preventiva do forno e da masseira", investimento 900
-- dia 27, contabilidade: "Fechei o mês com o contador e revisei o enquadramento no Simples", investimento 400
-Exemplos de decisões do mês (nos outros campos): mudar preço, reajustar salários, contratar ou demitir, definir o pró-labore, distribuir lucro, tomar ou pagar empréstimo, contratar seguro, abrir ou fechar unidade, lançar franquia, responder a quem pediu para sair, aceitar uma encomenda, aplicar o dinheiro do bolso.
+CANAIS DE DIVULGAÇÃO E CRESCIMENTO (para as apostas)
+${Object.entries(CANAIS).map(([k, v]) => `${k} (${v})`).join('; ')}.
+Mensagens possíveis: ${ABORDAGENS.join(', ')}.
 
-NEGÓCIOS QUE VOCÊ PODE TER (por unidade, por ano)
-${Object.entries(NEGOCIOS).map(([t, d]) => `- ${t}: ${d.nome}. Abrir custa ${R$(d.capex)}; vende cerca de ${R$(d.receita)}; insumos ${Math.round(d.insumo * 100)}% da receita; ${d.func} funcionários; aluguel ${R$(d.aluguel)}.${d.requer ? ` Exige ${Object.entries(d.requer).map(([k, v]) => `${k} ${v}`).join(' e ')}.` : ''}`).join('\n')}
-- franquia: lançar custa ${R$(FRANQUIA.lancamento)}, exige 5 padarias próprias e marca 0,5; rende 6% do faturamento de cada franqueado mais taxa de adesão.
-
-IMPOSTOS E LEIS
-- Simples Nacional: receita dos últimos 12 meses até R$ 4,8 milhões. Paga de 4% a 19% da receita conforme a faixa e encargos de 35% sobre salários.
-- Acima disso: cerca de 9% da receita em tributos sobre vendas (a partir de 2033, IVA sobre receita menos insumos), 34% sobre o lucro e encargos de 70% sobre salários. Passar do teto é um degrau caro.
-- Demitir custa 25% do salário anual por pessoa. Contratar custa 60% de um salário mensal e o novato chega sem experiência.
-- Sem caixa e sem crédito a empresa entra em recuperação judicial por dois anos (Lei 11.101/2005): não investe nem distribui lucro. Se não se recuperar, vai à falência.
-
-QUEM GOVERNA MUDA O JOGO (eleição federal em outubro de 2026, 2030...; municipal em 2028, 2032...; posse em janeiro)
-- Governo federal de esquerda: ${GOVERNO.federal.esquerda.texto}.
-- Governo federal de direita: ${GOVERNO.federal.direita.texto}.
-- Prefeitura de esquerda: ${GOVERNO.municipal.esquerda.texto}.
-- Prefeitura de direita: ${GOVERNO.municipal.direita.texto}.
-
-O ACASO DO DIA A DIA (chance por mês; os sorteios são os mesmos para os três empresários, o que muda é o quanto cada um se preparou)
-${Object.values(EVENTOS).map((e) => `- ${e.nome} (${e.chance < 1 ? `${(e.chance * 100).toFixed(1).replace('.0', '')}% por ${e.base}` : e.base}): ${e.texto}`).join('\n')}
-Algumas situações chegam como pendência, com opções. Responda pelo id. Sem resposta, vale a primeira opção, que costuma ser a pior. Com "reposicao_de_pessoal": "automatica", quem sai é reposto sem você precisar responder.
-
-CONTRA OS RIVAIS, TUDO É ESTRATÉGIA
+O QUE VOCÊ PODE FAZER CONTRA OS OUTROS DOIS
 ${Object.entries(ACOES).map(([t, a]) => `- ${t}: ${a.nome}. ${a.lei}.`).join('\n')}
-As ilícitas rendem mais e podem ser descobertas: multa, dano à reputação e, em alguns casos, afastamento. A escolha e o risco são seus.
 
-TOKENS
-Os três têm a mesma verba para o jogo inteiro (veja "tokens" no relatório). Tudo o que você lê, raciocina e escreve conta, e este texto de regras é cobrado a cada despacho. Você escolhe quando volta a despachar (de 1 a 12 meses). Nos meses sem despacho, preço, salários, equipe ideal, pró-labore e seguro ficam como estão, nada novo é investido e as pendências são resolvidas pela primeira opção. Seja breve.
+LIMITE DE PALAVRAS
+Você tem uma verba fixa de tokens para os 50 anos (veja "tokens" no relatório); tudo o que lê e escreve conta. Você escolhe quando volta a despachar (de 1 a 12 meses). Nos meses sem despacho nada muda por sua iniciativa e as pendências se resolvem pela primeira opção.
 
 RESPOSTA
-Responda apenas com um objeto JSON, sem texto fora dele. Quem assiste lê o seu diário e as justificativas: fale como dono de padaria, de forma concreta.
+Responda apenas com um objeto JSON, sem texto fora dele. Seu diário é lido por quem acompanha: escreva como dono do negócio, de forma concreta.
 {
   "diario": "duas a quatro frases, em primeira pessoa: como foi o mês, o que decidiu e por quê",
   "estrategia": "só quando mudar de plano; senão, texto vazio",
   "respostas": [ { "id": número da pendência, "opcao": uma das opções dela, "justificativa": "..." } ],
-  "operacoes": [ { "negocio": um que você tem, "preco_indice": número, "salario_indice": número (1 é o salário de mercado), "funcionarios_por_unidade": equipe ideal, "contratar": pessoas, "demitir": pessoas, "investir_em_qualidade": reais, "vendo_por": valor pelo qual aceita vender esse negócio inteiro a um rival, ou 0, "justificativa": "..." } ],
-  "movimentos": [ { "acao": "abrir" | "fechar" | "vender" | "lancar_franquia", "negocio": do catálogo, "quantidade": número, "onde": id de um lugar | "campinas" | "fora", "justificativa": "..." } ],
-  "agenda": [ { "dia": 1 a 30, "area": uma das valências, "acao": "o que você fez nesse dia, em uma frase", "investimento": reais } ],
+  "operacoes": [ { "negocio": um que você tem, "preco_indice": número (1 é o preço comum do mercado), "salario_indice": número (1 é o salário de mercado), "funcionarios_por_unidade": número, "contratar": pessoas, "demitir": pessoas, "investir_em_qualidade": reais, "vendo_por": valor pelo qual aceita vender esse negócio a um dos outros dois, ou 0, "justificativa": "..." } ],
+  "movimentos": [ { "acao": "abrir" | "fechar" | "vender" | "lancar_franquia" | "vender_empresa" | "comprar_anuncio" | "auditar_anuncio", "negocio": tipo, "quantidade": número, "onde": id de um lugar | "campinas" | "fora", "anuncio": número do anúncio, "oferta": reais, "justificativa": "..." } ],
+  "agenda": [ { "dia": 1 a 30, "area": uma das áreas, "acao": "o que você fez nesse dia, em uma frase", "investimento": reais } ],
+  "apostas": [ { "canal": um dos canais, "negocio": um que você tem, "abordagem": uma das mensagens, "investimento": reais, "justificativa": "..." } ],
   "gestao": { "seguro": true ou false, "reposicao_de_pessoal": "manual" | "automatica", "justificativa": "..." },
   "financas": { "pro_labore": reais por mês, "distribuir_lucros": reais, "aporte_do_dono": reais, "tomar_emprestimo": reais, "amortizar_divida": reais, "justificativa": "..." },
   "bolso": { "aplicar_renda_fixa": reais, "resgatar_renda_fixa": reais, "aplicar_bolsa": reais, "resgatar_bolsa": reais, "comprar_imoveis": reais, "vender_imoveis": reais, "pagar_divida_pessoal": reais, "justificativa": "..." },
-  "acoes_externas": [ { "tipo": da lista acima, "alvo": nome do rival ou "", "negocio": para oferta de compra, "recursos": reais, "justificativa": "..." } ],
-  "acao_livre": "qualquer outra coisa que você faria; fica registrada para quem assiste, mas não muda os números",
-  "fala": "frase pública, se quiser dizer algo aos rivais",
-  "memoria": "nota para você mesmo ler no próximo despacho (sua única memória)",
+  "acoes_externas": [ { "tipo": da lista acima, "alvo": nome do outro dono ou "", "negocio": para oferta de compra, "recursos": reais, "justificativa": "..." } ],
+  "acao_livre": "qualquer outra coisa que você faria; fica registrada, mas não muda os números",
+  "fala": "frase pública, se quiser",
+  "memoria": "nota para você mesmo ler no próximo despacho (é a sua única memória: anote o que testou e o que deu)",
   "proximo_despacho_em_meses": 1 a 12
 }
-A agenda, as contratações, os movimentos e as finanças valem só para este mês. Use zeros e listas vazias onde não quiser agir.`;
+A agenda (de 4 a 12 ações datadas, o seu dia a dia), as apostas, as contratações, os movimentos e as finanças valem só para este mês. Use zeros e listas vazias onde não quiser agir.`;
 
 function ensaioCEO(s) {
   const e = s.empresa, tem = e.negocios[0];
@@ -247,6 +222,7 @@ function ensaioCEO(s) {
       respostas: s.pendencias_para_responder.map((p) => ({ id: p.id, opcao: p.opcoes[1] || p.opcoes[0], justificativa: 'Ensaio.' })),
       operacoes: tem ? [{ negocio: tem.negocio, preco_indice: 1, salario_indice: 1, funcionarios_por_unidade: 8, contratar: Math.max(0, tem.equipe_ideal - tem.equipe), demitir: 0, investir_em_qualidade: sobra * 0.12, vendo_por: 0, justificativa: 'Ensaio: preço de mercado, equipe completa.' }] : [],
       movimentos: sobra * 3 > 220000 && e.capacidade_de_gestao > e.carga_de_gestao + 1 ? [{ acao: 'abrir', negocio: 'padaria', quantidade: 1, onde: 'campinas', justificativa: 'Ensaio: o caixa cobre mais uma.' }] : [],
+      apostas: tem ? [{ canal: 'instagram_posts', negocio: tem.negocio, abordagem: 'produto', investimento: Math.round(sobra * 0.03), justificativa: 'Ensaio: testar o Instagram.' }] : [],
       agenda, gestao: z, financas: { pro_labore: Math.round(s.seu_bolso.custo_de_vida_mensal * 1.15), distribuir_lucros: 0, aporte_do_dono: 0, tomar_emprestimo: 0, amortizar_divida: 0, justificativa: 'Ensaio: pró-labore cobre a casa.' },
       bolso: { aplicar_renda_fixa: 0, resgatar_renda_fixa: 0, aplicar_bolsa: 0, resgatar_bolsa: 0, comprar_imoveis: 0, vender_imoveis: 0, pagar_divida_pessoal: 0, justificativa: '' },
       acoes_externas: [], acao_livre: '', fala: '', memoria: 'ensaio', proximo_despacho_em_meses: 1,

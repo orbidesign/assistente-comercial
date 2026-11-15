@@ -9,7 +9,7 @@ repositório próprio.
 
 ## Três CEOs, uma padaria (modo principal)
 
-Claude, Grok e Gemini são empresários. Os três começam iguais: uma padaria de bairro em Campinas, R$ 20 mil no caixa da empresa, janeiro de 2026. O jogo anda mês a mês por 100 anos (1.200 meses, até dezembro de 2125) e **sempre vai até o fim**. Ganha quem tiver o maior **patrimônio pessoal** no último mês. Fracassar, estagnar ou ficar com uma padaria só são desfechos possíveis: não há prêmio por crescer primeiro nem por sobrar sozinho.
+Claude, Grok e Gemini são empresários. Os três começam iguais: uma padaria de bairro em Campinas, R$ 20 mil no caixa da empresa, janeiro de 2026. O jogo anda mês a mês por 50 anos (600 meses, até dezembro de 2075) e **sempre vai até o fim**. Ganha quem tiver o maior **patrimônio pessoal** no último mês. Fracassar, estagnar ou ficar com uma padaria só são desfechos possíveis: não há prêmio por crescer primeiro nem por sobrar sozinho.
 
 ```bash
 npm install
@@ -19,6 +19,22 @@ ARENA_ENSAIO=1 node server/index.mjs   # respostas simuladas, sem gastar
 ```
 
 Com chaves de verdade: `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY` (e, para o mapa do Google, `GOOGLE_MAPS_API_KEY`). Sem chave de alguma IA, aquele CEO joga por regras.
+
+### Como abrir (computador e iPad)
+
+O jogo roda em um computador seu, que faz as chamadas às IAs com as suas chaves. No próprio computador: `http://localhost:8787/ceo.html`. No iPad ou celular, na mesma rede Wi-Fi: `http://IP-DO-COMPUTADOR:8787/ceo.html` (o IP aparece em Ajustes de rede; algo como 192.168.0.12). O computador precisa ficar ligado com o servidor rodando. Para abrir de qualquer lugar, é preciso publicar o servidor em uma hospedagem.
+
+### Sem manual
+
+As IAs não recebem fórmulas nem dicas do que funciona. O texto de sistema traz só o que um dono de negócio saberia: as leis e os impostos, os orçamentos de mercado, os lugares, a lista de canais e o formato da resposta. Todo o resto vem pelo relatório do mês: os números, o que aconteceu e o retorno do que foi tentado. A única memória entre um mês e outro é a nota que a própria IA escreve.
+
+Três coisas são ocultas de propósito e só se descobrem tentando:
+
+- **Canais de divulgação** (Instagram posts, Instagram anúncios, influenciador, WhatsApp, Google, aplicativos de entrega, fidelidade, panfleto, degustação, produto novo, venda para empresas, rádio e jornal, vídeos curtos), cada um com seis mensagens possíveis. O efeito depende do canal, do tipo de negócio, da mensagem, da qualidade do produto, do cansaço do canal e da época (o cenário muda a cada oito anos), com ruído. A IA vê apenas "gastei X, alcancei Y pessoas, vieram Z clientes".
+- **Negócios à venda**: anúncios de terceiros com preço pedido e faturamento declarado. O faturamento real, o estado da operação, o preço mínimo que o vendedor aceita e eventuais contas escondidas não aparecem; uma auditoria (R$ 6.000) dá uma estimativa.
+- **Venda da empresa inteira**: a proposta do comprador sai entre 70% e 100% do valor estimado. O dinheiro vai para o nome do dono, descontado o imposto sobre ganho de capital, e ele pode abrir ou comprar outro negócio.
+
+Um empresário pode ter vários negócios ao mesmo tempo (padaria, cafeteria, minimercado, restaurante, entrega, indústria, distribuidora). Eles ficam sob o mesmo dono e o mesmo caixa; a lei do Simples soma a receita das empresas de um mesmo sócio, então o imposto é calculado sobre o conjunto.
 
 ### Como o mês funciona
 
@@ -50,15 +66,25 @@ Aba inicial: gráfico interativo (patrimônio, caixa da empresa, bolso, valor da
 
 ### Batalha justa
 
-Mesmo começo, mesmo prompt, mesmo dossiê, mesmos sorteios, mesmo orçamento de **tokens** (10 milhões por CEO no século). Um teste garante que decisões idênticas dão patrimônios idênticos, seja qual for a ordem. Quem gasta os tokens antes passa a não decidir.
+Mesmo começo, mesmo prompt, mesmo dossiê, mesmos sorteios, mesmo orçamento de **tokens** (5 milhões por CEO nos 50 anos). Um teste garante que decisões idênticas dão patrimônios idênticos, seja qual for a ordem. Quem gasta os tokens antes passa a não decidir.
 
 ### Custo e tempo (estimativa, não medido)
 
-1.200 despachos por IA, cerca de 6 mil tokens cada. A preços na faixa de US$ 2 / US$ 10 por milhão de tokens, algo como US$ 15 a 25 por IA por partida completa, e 2 a 3,5 horas. A IA pode pedir o próximo despacho só daqui a N meses (1 a 12) para economizar.
+600 despachos por IA, cerca de 6 mil tokens cada. A preços na faixa de US$ 2 / US$ 10 por milhão de tokens, algo como US$ 8 a 13 por IA por partida completa, e 1 a 2 horas. A IA pode pedir o próximo despacho só daqui a N meses (1 a 12) para economizar.
 
 ### O que é lei e o que é estimativa
 
-Regras codificadas a partir da lei: Simples Nacional (Anexo I), IRPJ+CSLL, encargos de folha, INSS e IRPF do pró-labore, tributação de dividendos, Lei 11.101 (recuperação e falência), reforma tributária (EC 132). São estimativas minhas: demanda, capex e margens dos negócios, fatores de renda/aluguel dos bairros, coordenadas aproximadas, efeito das valências e dos governos.
+Números oficiais usados (valores de 2026):
+
+- Simples Nacional, Anexo I (comércio): seis faixas até R$ 4,8 milhões, alíquotas de 4% a 19% com parcela a deduzir (LC 123/2006).
+- IRPF mensal: tabela progressiva (7,5% a 27,5%), imposto zero até R$ 5.000 e redução parcial até R$ 7.350 (Lei 15.270/2025).
+- Lucros e dividendos: 10% na fonte sobre o que passa de R$ 50 mil por mês (Lei 15.270/2025).
+- INSS do pró-labore: 11% até o teto de R$ 8.475,55; salário mínimo de R$ 1.621.
+- Lucro presumido para comércio: presunção de 8% (IRPJ) e 12% (CSLL), IRPJ de 15% mais adicional de 10% acima de R$ 20 mil por mês, CSLL de 9%; limite de R$ 78 milhões. Acima, lucro real (34%).
+- Ganho de capital na venda da empresa: 15%, 17,5%, 20% e 22,5% por faixas (Lei 13.259/2016).
+- Recuperação judicial e falência (Lei 11.101/2005); IVA da reforma tributária a partir de 2033 (EC 132).
+
+Esses valores vieram de portais contábeis e jurídicos que citam as normas, não diretamente do site da Receita; vale conferir antes de tratar como referência. São estimativas minhas: ICMS (embutido nos cerca de 9% sobre vendas fora do Simples), encargos sobre a folha (35% e 70%), demanda, custo de abertura e margens dos negócios, fatores dos bairros, coordenadas, efeito das valências, dos canais e dos governos.
 
 ### Não verificado
 
