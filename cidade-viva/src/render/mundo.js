@@ -6,7 +6,7 @@ import { toon, matJanela, aleatorio, texturaPonto } from './base.js';
 const C = (h) => new THREE.Color(h);
 const CORES = {
   grama: C(0x7cc24f), gramaEscura: C(0x4f9a3c), gramaClara: C(0xa5d86a), areia: C(0xe2cf95),
-  rocha: C(0x8d8a84), rochaClara: C(0xb4b0a6), neve: C(0xf4f8ff), terra: C(0xb08a5a), pedra: C(0xa9a49a),
+  rocha: C(0x8d8a84), rochaClara: C(0xb4b0a6), neve: C(0xf4f8ff), terra: C(0xb08a5a), pedra: C(0xa9a49a), asfalto: C(0x7b7b82),
 };
 
 // Paleta do céu ao longo do dia: [hora, topo, horizonte, luz do sol, intensidade, ambiente]
@@ -55,9 +55,9 @@ export function criarMundo3D(scene, q = { arvores: 1700, tufos: 6500, sombra: 20
   scene.add(terreno);
 
   // Caminhos de terra (ou pedra) pintados nos vértices, ligando os prédios.
-  function pintarCaminhos(pontos, calcada) {
+  function pintarCaminhos(pontos, calcada, asfalto = false) {
     const cor = geo.attributes.color;
-    const alvo = calcada ? CORES.pedra : CORES.terra;
+    const alvo = asfalto ? CORES.asfalto : calcada ? CORES.pedra : CORES.terra;
     for (let i = 0; i < n; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
       let f = 0;
@@ -379,7 +379,7 @@ export function criarMundo3D(scene, q = { arvores: 1700, tufos: 6500, sombra: 20
       }
       chuva.geometry.attributes.position.needsUpdate = true;
     }
-    const modo = chovendo ? null : m >= 3 && m <= 5 ? 'folhas' : m === 6 || m === 7 ? 'neve' : m === 8 || m === 9 ? 'petalas' : null;
+    const modo = chovendo ? null : m >= 3 && m <= 5 ? 'folhas' : (m === 6 || m === 7) && !q.semNeve ? 'neve' : m === 8 || m === 9 ? 'petalas' : null;
     clima.visible = !!modo;
     if (modo) {
       const M2 = MODOS[modo];

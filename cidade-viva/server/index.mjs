@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TIPOS_EFEITO, ALVOS_EFEITO, NEGOCIOS, SERVICOS } from '../src/sim/dados.js';
 import { PROVEDORES, ativo, decidir } from './provedores.mjs';
 import { TOKENS_TOTAL } from '../src/arena/arena.js';
+import { TOKENS_SECULO } from '../src/brasil/disputa.js';
 
 const PORTA = +process.env.PORT || 8787;
 // Custo baixo por padrão: o modelo mais barato dá conta de traduzir um evento em
@@ -88,6 +89,7 @@ let livro = { jogo: null, gasto: {} };
 try { livro = JSON.parse(fs.readFileSync(ARQUIVO_GASTO, 'utf8')); } catch { /* primeira execução */ }
 
 async function rotaArena(req, res) {
+  const br = req.url === '/api/arena/decidir-brasil';
   if (req.url === '/api/arena/status') {
     return responder(res, 200, {
       tokens: TOKENS_ARENA, jogo: livro.jogo, ensaio: process.env.ARENA_ENSAIO === '1',
@@ -99,8 +101,8 @@ async function rotaArena(req, res) {
   if (!PROVEDORES[id]) return responder(res, 400, { erro: 'provedor desconhecido' });
   if (!ativo(id)) return responder(res, 503, { erro: 'sem chave para este provedor' });
   if (livro.jogo !== corpo.jogo) livro = { jogo: corpo.jogo, gasto: {} };
-  if ((livro.gasto[id] || 0) >= TOKENS_ARENA) return responder(res, 429, { erro: 'verba de tokens desta API esgotada' });
-  const r = await decidir(id, corpo.situacao || {});
+  if ((livro.gasto[id] || 0) >= (br ? TOKENS_SECULO : TOKENS_ARENA)) return responder(res, 429, { erro: 'verba de tokens desta API esgotada' });
+  const r = await decidir(id, corpo.situacao || {}, br ? 'brasil' : 'arena');
   livro.gasto[id] = (livro.gasto[id] || 0) + r.tokens;
   fs.writeFile(ARQUIVO_GASTO, JSON.stringify(livro), () => {});
   responder(res, 200, { ...r, gasto: livro.gasto[id], modelo: PROVEDORES[id].modelo });

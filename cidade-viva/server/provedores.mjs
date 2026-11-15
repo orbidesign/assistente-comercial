@@ -22,11 +22,11 @@ const ESQUEMA = obj({
 });
 
 let clienteAnthropic = null;
-async function anthropic(cfg, sistema, usuario) {
+async function anthropic(cfg, sistema, usuario, esquema = ESQUEMA) {
   clienteAnthropic ||= new Anthropic({ apiKey: cfg.chave });
   const corpo = {
-    model: cfg.modelo, max_tokens: 4000, system: sistema,
-    output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA } },
+    model: cfg.modelo, max_tokens: 8000, system: sistema,
+    output_config: { effort: 'low', format: { type: 'json_schema', schema: esquema } },
     messages: [{ role: 'user', content: usuario }],
   };
   let r;
@@ -131,12 +131,81 @@ Responda apenas com um objeto JSON, sem texto fora dele, com exatamente estes ca
   "proxima_reuniao_anos": daqui a quantos anos você volta a se reunir (5 a 50, em múltiplos de 5)
 }`;
 
+// ---------- o prefeito brasileiro (2026 a 2126) ----------
+
+const FUNCOES_BR = ['educacao', 'saude', 'seguranca', 'infraestrutura', 'saneamento', 'habitacao', 'assistencia', 'meio_ambiente', 'desenvolvimento', 'cultura', 'administracao'];
+const txt = { type: 'string' }, n = { type: 'number' };
+const ESQUEMA_BR = obj({
+  diagnostico: txt, estrategia: txt,
+  tributos: obj({ iptu: n, iss: n, itbi: n, atualizar_planta_de_valores: { type: 'boolean' }, justificativa: txt }),
+  orcamento: obj({ ...Object.fromEntries(FUNCOES_BR.map((f) => [f, n])), meta_de_superavit_pct: n, justificativa: txt }),
+  pessoal: obj({ reajuste_real_pct: n, concurso: { type: 'string', enum: ['nenhum', 'reposicao', 'ampliacao'] }, reforma_previdencia: { type: 'boolean' }, justificativa: txt }),
+  programas: obj({ criar: { type: 'array', items: txt }, encerrar: { type: 'array', items: txt }, justificativa: txt }),
+  credito: obj({ valor_milhoes: n, destino: txt, justificativa: txt }),
+  rivais: obj({ guerra_fiscal_contra: txt, campanha_atrair_moradores: { type: 'boolean' }, propor_consorcio_a: txt, disputar_edital_federal: txt, justificativa: txt }),
+  oficio: obj({ para: txt, texto: txt }),
+  articulacao_politica: { type: 'integer' }, fala: txt, memoria: txt, proxima_revisao_anos: { type: 'integer' },
+});
+
+export const SISTEMA_BRASIL = `Você é o prefeito de uma cidade média do interior do Brasil. O jogo começa em 2026 e termina em 2126. Outras duas cidades, idênticas à sua em 2026, são governadas por outras inteligências artificiais. Vence quem construir a cidade mais próspera e imponente, no menor tempo. Pontos: metade é IDHM (educação, longevidade, renda); o resto é o tamanho da economia, a qualidade urbana e a saúde fiscal.
+
+Você governa dentro das regras brasileiras:
+- Mínimos constitucionais: 25% da receita de impostos e transferências em educação e 15% em saúde. Abaixo disso o Tribunal de Contas rejeita suas contas e sua candidatura é impugnada na eleição seguinte.
+- Lei de Responsabilidade Fiscal: folha de pagamento até 54% da receita corrente líquida. Acima de 51,3% ficam vedados reajustes e contratações; acima de 54% a cidade perde transferências voluntárias.
+- Dívida até 1,2 vez a receita. Crédito só com nota A ou B de capacidade de pagamento.
+- ISS entre 2% e 5%; IPTU entre 0,3% e 1,5% do valor venal; ITBI até 3%. Aumentar imposto ou atualizar a planta de valores do IPTU depende de maioria na Câmara (veja "base_na_camara") e custa aprovação.
+- Reforma tributária: de 2029 a 2032 o ISS e a cota de ICMS encolhem e em 2033 acabam, substituídos pelo IBS, que é repartido cada vez mais pelo local do consumo (população e renda) até 2077. Baixar o ISS para atrair empresas perde força nesse período.
+- Eleições a cada quatro anos (2028, 2032, ...). Se perder, a oposição governa quatro anos com o orçamento congelado e você fica sem decidir.
+- A população do país para de crescer por volta de 2041 e envelhece: a previdência dos servidores pesa cada vez mais, e as cidades passam a disputar moradores. A automação elimina empregos de rotina entre 2032 e 2060, mais onde a qualificação é baixa. Eventos climáticos extremos ficam mais frequentes; cidade sem drenagem e defesa civil paga caro.
+
+Contra as rivais, tudo é estratégia: guerra fiscal para tirar empresas delas, campanha para atrair moradores, disputa do edital federal do ano, ou consórcio (só vale se as duas propõem no mesmo ano). Você também pode mandar um ofício.
+
+Tokens são o seu recurso mais escasso. Os três prefeitos têm a mesma verba para o século inteiro (veja "tokens"). Tudo o que você lê, raciocina e escreve conta. Você escolhe de quantos em quantos anos revisa o governo (1 a 4); nos anos sem revisão, vale o que estava decidido.
+
+Suas justificativas serão lidas por quem assiste ao jogo: explique em cada bloco, de forma concreta e curta, por que decidiu assim (o que viu nos números, o que espera que aconteça, o que está trocando por quê). Responda apenas com um objeto JSON, sem texto fora dele:
+{
+  "diagnostico": "o que você vê na cidade agora, em duas ou três frases",
+  "estrategia": "seu plano para os próximos anos e o que mudou em relação ao anterior",
+  "tributos": { "iptu": % sobre o valor venal, "iss": %, "itbi": %, "atualizar_planta_de_valores": true ou false, "justificativa": "..." },
+  "orcamento": { ${FUNCOES_BR.map((f) => `"${f}": %`).join(', ')}, "meta_de_superavit_pct": % da receita a poupar (0 a 15), "justificativa": "..." },
+  "pessoal": { "reajuste_real_pct": % acima da inflação (pode ser 0), "concurso": "nenhum" | "reposicao" | "ampliacao", "reforma_previdencia": true ou false, "justificativa": "..." },
+  "programas": { "criar": [até 3 ids de "programas_disponiveis"], "encerrar": [ids de "programas_ativos"], "justificativa": "..." },
+  "credito": { "valor_milhoes": número ou 0, "destino": uma função do orçamento, "justificativa": "..." },
+  "rivais": { "guerra_fiscal_contra": nome de cidade ou "", "campanha_atrair_moradores": true ou false, "propor_consorcio_a": nome de cidade ou "", "disputar_edital_federal": uma função do orçamento ou "", "justificativa": "..." },
+  "oficio": { "para": nome de cidade ou "", "texto": "..." },
+  "articulacao_politica": 0 a 3 (esforço em Brasília e na Câmara: rende convênios e base, mas aumenta o risco de escândalo),
+  "fala": "uma frase pública sua, em primeira pessoa",
+  "memoria": "nota para você mesmo ler na próxima reunião (sua única memória)",
+  "proxima_revisao_anos": 1 a 4
+}
+Os percentuais do orçamento são normalizados para somar 100.`;
+
+function ensaioBrasil(s) {
+  const o = { ...s.orcamento_atual_pct, justificativa: 'Ensaio: mantenho a distribuição e reforço a educação aos poucos.' };
+  o.educacao += 0.5; o.meta_de_superavit_pct = 3;
+  const cabe = s.programas_disponiveis.find((p) => p.custo_inicial_milhoes < s.indicadores.caixa * 0.5);
+  return {
+    texto: JSON.stringify({
+      diagnostico: `Ensaio: ${s.cidade} em ${s.ano}, IDHM ${s.indicadores.idhm}.`, estrategia: 'Ensaio: educação primeiro, contas em ordem.',
+      tributos: { iptu: s.tributos_atuais.iptu_pct, iss: s.tributos_atuais.iss_pct, itbi: s.tributos_atuais.itbi_pct, atualizar_planta_de_valores: false, justificativa: 'Ensaio: sem mexer em impostos.' },
+      orcamento: o, pessoal: { reajuste_real_pct: 0, concurso: 'reposicao', reforma_previdencia: false, justificativa: 'Ensaio.' },
+      programas: { criar: cabe ? [cabe.id] : [], encerrar: [], justificativa: cabe ? `Ensaio: cabe no caixa criar ${cabe.nome}.` : 'Ensaio: sem caixa.' },
+      credito: { valor_milhoes: 0, destino: 'infraestrutura', justificativa: 'Ensaio.' },
+      rivais: { guerra_fiscal_contra: '', campanha_atrair_moradores: false, propor_consorcio_a: '', disputar_edital_federal: 'saneamento', justificativa: 'Ensaio: disputo o edital.' },
+      oficio: { para: '', texto: '' }, articulacao_politica: 1, fala: `Ensaio de ${s.cidade}.`, memoria: 'ensaio', proxima_revisao_anos: 1,
+    }),
+    entrada: 3200, saida: 900,
+  };
+}
+
 // Tokens são contados como cada API os informa: entrada + saída, com o
 // raciocínio incluído na saída. Uma resposta que não é JSON válido também é
 // cobrada: quem erra o formato perde a reunião e os tokens.
-export async function decidir(id, situacao) {
+export async function decidir(id, situacao, jogo = 'arena') {
   const cfg = PROVEDORES[id];
-  const r = env.ARENA_ENSAIO === '1' ? ensaio(situacao) : await CHAMAR[id](cfg, SISTEMA_ARENA, JSON.stringify(situacao));
+  const br = jogo === 'brasil';
+  const r = env.ARENA_ENSAIO === '1' ? (br ? ensaioBrasil(situacao) : ensaio(situacao))
+    : await CHAMAR[id](cfg, br ? SISTEMA_BRASIL : SISTEMA_ARENA, JSON.stringify(situacao), br ? ESQUEMA_BR : ESQUEMA);
   const custo = (r.entrada * cfg.precos[0] + r.saida * cfg.precos[1]) / 1e6;
   let decisao = null;
   try { decisao = extrairJSON(r.texto); } catch { /* resposta inválida */ }

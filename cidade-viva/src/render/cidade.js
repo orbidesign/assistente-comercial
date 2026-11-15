@@ -7,7 +7,9 @@ import { toon, cilindro, esfera, cone, caixa, aleatorio } from './base.js';
 
 const saltinho = (t) => { const c = 1.70158, u = t - 1; return 1 + (c + 1) * u * u * u + c * u * u; };
 
-export function criarCidade(scene, mundo3d) {
+// opcoes: { listar, fabricar, praca } trocam a origem e os modelos dos prédios
+// (o modo Brasil usa uma cidade contemporânea no lugar da vila).
+export function criarCidade(scene, mundo3d, opcoes = {}) {
   const grupo = new THREE.Group();
   scene.add(grupo);
   const predios = new Map();
@@ -27,12 +29,12 @@ export function criarCidade(scene, mundo3d) {
   }
 
   function sincronizar(w, tempo, imediato = false) {
-    const lista = desejados(w);
+    const lista = opcoes.listar ? opcoes.listar(w) : desejados(w);
     const novos = [];
     const chaves = new Map(lista.map((s) => [s.chave, s]));
     for (const [chave, p] of predios) {
       const s = chaves.get(chave);
-      if (!s || s.nivel !== p.spec.nivel) {
+      if (!s || s.nivel !== p.spec.nivel || s.tipo !== p.spec.tipo) {
         predios.delete(chave);
         if (s) grupo.remove(p.obj); else { p.fim = tempo; saindo.push(p); }
         sujo = 1;
@@ -40,7 +42,7 @@ export function criarCidade(scene, mundo3d) {
     }
     for (const s of lista) {
       if (predios.has(s.chave)) continue;
-      const obj = criarPredio(s);
+      const obj = (opcoes.fabricar || criarPredio)(s);
       obj.position.set(s.pos.x, altura(s.pos.x, s.pos.z) - 0.08, s.pos.z);
       obj.rotation.y = Math.atan2(-s.pos.x, -s.pos.z) + (aleatorio(s.id)() - 0.5) * 0.5;
       obj.userData.info = { classe: s.classe, id: s.id };
@@ -51,23 +53,24 @@ export function criarCidade(scene, mundo3d) {
       if (!imediato) novos.push(s);
       sujo = 1;
     }
-    if (eraPraca !== w.era) {
+    const eraVista = opcoes.praca ? 99 : w.era;
+    if (eraPraca !== eraVista) {
       if (praca) scene.remove(praca);
-      praca = criarPraca(w.era);
+      praca = opcoes.praca ? opcoes.praca() : criarPraca(w.era);
       praca.position.y = altura(0, 0);
       praca.userData.anims = [];
       praca.traverse((o) => { if (o.userData.anim) praca.userData.anims.push(o.userData.anim); });
       scene.add(praca);
       mundo3d.limparArea(0, 0, 7);
-      eraPraca = w.era;
+      eraPraca = eraVista;
     }
-    if (w.era >= 1 && !ponte) {
+    if ((opcoes.praca || w.era >= 1) && !ponte) {
       ponte = criarPonte();
       ponte.position.set(rioX(-12), NIVEL_AGUA, -12);
       scene.add(ponte);
       sujo = 1;
     }
-    const temEstrada = w.estado.predios.some((p) => p.tipo === 'estrada');
+    const temEstrada = opcoes.praca ? true : w.estado.predios.some((p) => p.tipo === 'estrada');
     if (temEstrada !== calcada) { calcada = temEstrada; sujo = 1; }
     if (imediato) repintar();
     return novos;
@@ -87,7 +90,7 @@ export function criarCidade(scene, mundo3d) {
       pontos.push({ x: spec.pos.x, z: spec.pos.z, vx: perto.x, vz: perto.z });
       feitos.push(spec.pos);
     }
-    mundo3d.pintarCaminhos(pontos, calcada);
+    mundo3d.pintarCaminhos(pontos, calcada, !!opcoes.praca);
   }
 
   function atualizar(dt, tempo, noite) {

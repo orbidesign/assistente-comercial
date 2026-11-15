@@ -6,7 +6,7 @@
     "dev": "node server/index.mjs & vite",
     "build": "vite build",
     "server": "node server/index.mjs",
-    "test": "node --test test/sim.test.mjs test/arena.test.mjs",
+    "test": "node --test test/sim.test.mjs test/arena.test.mjs test/brasil.test.mjs",
     "simular": "node test/simular.mjs",
     "arena:simular": "node test/arena-simular.mjs",
     "torneio": "node server/torneio.mjs"
