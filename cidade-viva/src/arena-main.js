@@ -6,14 +6,15 @@ import { governoPorRegras, pontos } from './sim/sim.js';
 import { ERAS } from './sim/dados.js';
 import { altura, NIVEL_AGUA } from './sim/geo.js';
 import {
-  criarArena, avancarArena, turnoDevido, aplicarTurno, situacao, rivaisPublicos, podePagar, registrarCusto, classificacao, cidade as cidadeDe,
-  PROVEDORES, VERBA_TOTAL, VERBA_MILENIO, MESES_MILENIO, MESES_POR_TURNO,
+  criarArena, avancarArena, turnoDevido, aplicarTurno, situacao, rivaisPublicos, podePagar, registrarCusto, classificacao, naVez, cidade as cidadeDe,
+  PROVEDORES, TOKENS_TOTAL, TOKENS_MILENIO, MESES_MILENIO,
 } from './arena/arena.js';
 import { criarMundo3D } from './render/mundo.js';
 import { criarCidade, criarMoradores } from './render/cidade.js';
 import { criarFX } from './render/fx.js';
 
-const CHAVE = 'cidade-viva-arena-v1';
+const CHAVE = 'cidade-viva-arena-v2';
+const mil = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)} mi` : `${Math.round(n / 1000)} mil`);
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -61,7 +62,7 @@ function nova() {
 }
 let a = carregar() || nova();
 let vista = a.cidades[0].id, velocidade = 4, acumulado = 0, tempo = 0, pensando = false, aba = 'cronica';
-let servidor = { verba: VERBA_TOTAL, provedores: {} };
+let servidor = { provedores: {} };
 let ultimoEspelho = -1, ultimoLog = a.log[a.log.length - 1] || null;
 const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(a)); } catch { /* sem armazenamento */ } };
 const mundoVisto = () => cidadeDe(a, vista).w;
@@ -109,8 +110,9 @@ function estadoDaCidade(c) {
   if (pensando && c.pensando) return 'pensando…';
   if (!c.w.estado.existe) return 'ainda sem governo';
   if (!p || !p.ativo) return `sem chave: regras (${PROVEDORES[c.id].perfil})`;
-  if (c.gasto >= VERBA_TOTAL) return 'verba esgotada';
-  if (c.modo === 'semverba') return 'poupando verba';
+  if (c.tokens >= TOKENS_TOTAL) return 'tokens esgotados';
+  if (c.modo === 'semverba') return 'sem tokens liberados';
+  if (c.modo === 'invalida') return 'resposta inválida';
   if (c.modo === 'erro') return `erro: ${c.erro || ''}`;
   return p.modelo;
 }
@@ -126,8 +128,8 @@ function pintarCidades() {
       <div class="nome">${esc(w.nome)}</div>
       <div class="era">${ERAS[w.era].nome}</div>
       <div class="nums"><span>⭐ <b>${pontos(w)}</b></span><span>👥 ${w.ind.populacao}</span><span>⚔️ ${w.estado.exercito || 0}${marcha ? ` → ${marcha.forca}` : ''}</span></div>
-      <div class="verba" title="Verba de IA usada"><i style="width:${Math.min(100, (c.gasto / VERBA_TOTAL) * 100)}%"></i></div>
-      <div class="st">US$ ${c.gasto.toFixed(3)} · ${esc(estadoDaCidade(c))}</div></div></button>`;
+      <div class="verba" title="Tokens usados neste milênio"><i style="width:${Math.min(100, (c.tokensMilenio / TOKENS_MILENIO) * 100)}%"></i></div>
+      <div class="st">${mil(c.tokens)} tokens · ${esc(estadoDaCidade(c))}</div></div></button>`;
   }).join('');
 }
 
@@ -145,8 +147,10 @@ function pintarAba() {
       <div class="rot" style="margin-top:6px">Últimas decisões</div><div>${esc(c.feito.join('; ') || '—')}</div>
       <div class="rot" style="margin-top:6px">Governo</div>
       <div>imposto ${Math.round(c.w.estado.taxa * 100)}% · tesouro ${Math.round(c.w.estado.tesouro)} · legitimidade ${Math.round(c.w.estado.legitimidade * 100)}% · felicidade ${Math.round(c.w.ind.felicidade * 100)}% · saber ${Math.round(c.w.conhecimento)}</div>
-      <div class="rot" style="margin-top:6px">Verba</div>
-      <div>${c.chamadas} reuniões pagas · US$ ${c.gasto.toFixed(4)} de ${VERBA_TOTAL} no total · US$ ${c.gastoMilenio.toFixed(4)} de ${VERBA_MILENIO} neste milênio${c.custoMedio ? ` · cerca de US$ ${c.custoMedio.toFixed(4)} por reunião` : ''}${s ? ` · ${esc(s.modelo)}` : ''}</div>`;
+      <div class="rot" style="margin-top:6px">Tokens</div>
+      <div>${c.chamadas} reuniões · ${mil(c.tokensMilenio)} de ${mil(TOKENS_MILENIO)} neste milênio · ${mil(c.tokens)} de ${mil(TOKENS_TOTAL)} no jogo${c.mediaTokens ? ` · cerca de ${Math.round(c.mediaTokens)} por reunião` : ''} · ${c.invalidas} respostas inválidas · próxima reunião no ano ${Math.floor(c.proximoTurno / 12) + 1}${s ? ` · ${esc(s.modelo)}` : ''}${c.dolares ? ` · US$ ${c.dolares.toFixed(3)} (informativo)` : ''}</div>
+      <div class="rot" style="margin-top:6px">Eras conquistadas</div>
+      <div>${Object.entries(c.eras).filter(([e]) => +e > 0).map(([e, ano]) => `${ERAS[e].nome} no ano ${ano}`).join(' · ') || '—'}</div>`;
   } else if (aba === 'placar') {
     el.innerHTML = `<canvas id="placar"></canvas><div class="legenda">${a.cidades.map((c) => `<span><i style="background:${PROVEDORES[c.id].cor}"></i>${PROVEDORES[c.id].nome}: ${pontos(c.w)}</span>`).join('')}</div>
       <div class="rot" style="margin-top:6px">${a.marcos.filter((m, i, l) => l.findIndex((x) => x.era === m.era) === i).map((m) => `${ERAS[m.era].nome}: ${PROVEDORES[m.id].nome} (ano ${m.ano})`).join(' · ') || 'Nenhuma era conquistada ainda.'}</div>`;
@@ -165,8 +169,8 @@ function pintarAba() {
       Três cidades nascem iguais, da mesma semente. Cada uma tem o governo entregue a uma API: Claude, Grok ou Gemini.
       O povo e os empresários seguem as mesmas regras nas três; só o governo muda.<br><br>
       A cada 5 anos os governos se reúnem e decidem imposto, obras, pesquisa, auxílio, fomento, exército, diplomacia e guerra.
-      Cada API tem <b>US$ ${VERBA_TOTAL}</b> para o jogo inteiro e pode gastar no máximo <b>US$ ${VERBA_MILENIO} por milênio</b>, liberado aos poucos:
-      modelo mais caro pensa menos vezes, e nas reuniões que não pode pagar suas políticas ficam como estavam.<br><br>
+      A verba é em <b>tokens</b>, igual para as três: <b>${mil(TOKENS_TOTAL)}</b> no jogo inteiro e no máximo <b>${mil(TOKENS_MILENIO)} por milênio</b>, liberados aos poucos.
+      Conta tudo o que a IA lê, raciocina e escreve. Cada governo escolhe quando volta a se reunir (de 5 a 50 anos): pensar muito ou se reunir demais esgota a verba, e sem verba as políticas ficam congeladas.<br><br>
       Pontos = era, população, conhecimento, felicidade e educação. Sem chave configurada, a cidade é governada por regras simples com um temperamento fixo (sábio, guerreiro ou mercador), só para a disputa já ter graça; isso não diz nada sobre o modelo de verdade.<br><br>
       <button id="nova">🌱 Nova arena</button> &nbsp; <a href="./">Modo narrador</a>`;
     $('nova').onclick = () => { if (confirm('Encerrar esta disputa e começar outra do zero?')) { localStorage.removeItem(CHAVE); window.removeEventListener('pagehide', salvar); location.reload(); } };
@@ -225,6 +229,7 @@ async function turno() {
   const respostas = await Promise.all(a.cidades.map(async (c) => {
     c.pensando = false; c.erro = '';
     if (!c.w.estado.existe) return { modo: 'cedo' };
+    if (!naVez(a, c)) return { modo: c.modo };
     if (!servidor.provedores[c.id]?.ativo) return { modo: 'regras', d: governoPorRegras(c.w, rivaisPublicos(a, c), PROVEDORES[c.id].perfil) };
     if (!podePagar(a, c)) { c.turnosSemVerba++; return { modo: 'semverba' }; }
     c.pensando = true;
@@ -232,7 +237,8 @@ async function turno() {
     pintarCidades();
     try {
       const r = await pedirDecisao(c);
-      registrarCusto(c, r.custo);
+      registrarCusto(c, r.tokens, r.custo);
+      if (r.invalida) { c.invalidas++; return { modo: 'invalida' }; }
       return { modo: 'ia', d: r.decisao };
     } catch (e) { c.erro = e.message.slice(0, 80); return { modo: 'erro' }; }
   }));

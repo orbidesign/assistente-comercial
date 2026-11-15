@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { criarArena, avancarArena, turnoDevido, aplicarTurno, rivaisPublicos, podePagar, registrarCusto, situacao, verbaLiberada, MESES_MILENIO, VERBA_MILENIO } from '../src/arena/arena.js';
+import { criarArena, avancarArena, turnoDevido, aplicarTurno, rivaisPublicos, podePagar, registrarCusto, situacao, verbaLiberada, naVez, MESES_MILENIO, TOKENS_MILENIO, TOKENS_TOTAL } from '../src/arena/arena.js';
 import { governoPorRegras, aplicarGoverno, pontos } from '../src/sim/sim.js';
 import { extrairJSON } from '../server/provedores.mjs';
 
@@ -59,18 +59,30 @@ test('guerra: exército marcha, batalha acontece e alguém sai perdendo', () => 
   assert.ok(situacao(a, y).guerras_recentes.length === 1);
 });
 
-test('verba: no máximo 1 dólar por milênio, liberado aos poucos', () => {
+test('verba em tokens: igual para todas, no máximo 400 mil por milênio, liberada aos poucos', () => {
   const a = criarArena(1), c = a.cidades[0];
-  a.mes = 600;                         // ano 50
-  assert.ok(verbaLiberada(a) < 0.1);
-  registrarCusto(c, 0.03);
+  a.mes = 600;                         // ano 50: 6 mil + 5% de 400 mil = 26 mil liberados
+  assert.equal(Math.round(verbaLiberada(a)), 26000);
+  registrarCusto(c, 12000);
   assert.ok(podePagar(a, c));
-  registrarCusto(c, 0.03);
-  assert.ok(!podePagar(a, c), 'modelo caro precisa esperar a verba ser liberada');
-  a.mes = MESES_MILENIO - 1; c.gastoMilenio = VERBA_MILENIO - 0.001;
+  registrarCusto(c, 12000);
+  assert.ok(!podePagar(a, c), 'quem gasta muito por reunião precisa esperar');
+  a.mes = MESES_MILENIO - 1; c.tokensMilenio = TOKENS_MILENIO - 100;
   assert.ok(!podePagar(a, c));
-  c.gasto = 5; c.gastoMilenio = 0;
-  assert.ok(!podePagar(a, c), 'teto total de 5 dólares');
+  c.tokens = TOKENS_TOTAL; c.tokensMilenio = 0;
+  assert.ok(!podePagar(a, c), 'teto do jogo inteiro');
+});
+
+test('cada governo marca a própria próxima reunião, entre 5 e 50 anos', () => {
+  const a = rodar(criarArena(1), 60);
+  const c = a.cidades[0];
+  aplicarTurno(a, c, { proxima_reuniao_anos: 23 });
+  assert.equal(c.proximoTurno, a.mes + 25 * 12);
+  assert.ok(!naVez(a, c));
+  aplicarTurno(a, c, { proxima_reuniao_anos: 999 });
+  assert.equal(c.proximoTurno, a.mes + 50 * 12);
+  aplicarTurno(a, c, {});
+  assert.equal(c.proximoTurno, a.mes + 5 * 12);
 });
 
 test('JSON é extraído mesmo com cercas de código ou texto em volta', () => {

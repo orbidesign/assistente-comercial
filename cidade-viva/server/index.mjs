@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { TIPOS_EFEITO, ALVOS_EFEITO, NEGOCIOS, SERVICOS } from '../src/sim/dados.js';
 import { PROVEDORES, ativo, decidir } from './provedores.mjs';
+import { TOKENS_TOTAL } from '../src/arena/arena.js';
 
 const PORTA = +process.env.PORT || 8787;
 // Custo baixo por padrão: o modelo mais barato dá conta de traduzir um evento em
@@ -79,43 +80,17 @@ Se "estado" vier nulo, ainda não existe governo: devolva imposto_delta 0 e cons
 Decida com base nos números recebidos, como alguém com interesses reais decidiria, e deixe os lados discordarem quando fizer sentido. Cada "fala" é uma frase curta, em primeira pessoa, com personalidade, explicando a decisão.`;
 
 // ---------- Arena ----------
-const VERBA_ARENA = +process.env.ARENA_VERBA_USD || 5;
+const TOKENS_ARENA = +process.env.ARENA_TOKENS || TOKENS_TOTAL;
 const ARQUIVO_GASTO = path.join(aqui, '..', '.arena-gasto.json');
 // O gasto de cada API é contado aqui, por jogo, e fica em disco: reiniciar o
 // servidor não zera a conta de uma partida em andamento.
 let livro = { jogo: null, gasto: {} };
 try { livro = JSON.parse(fs.readFileSync(ARQUIVO_GASTO, 'utf8')); } catch { /* primeira execução */ }
 
-const SISTEMA_ARENA = `Você governa uma cidade em um jogo de simulação. Três cidades, cada uma governada por uma inteligência artificial diferente, disputam qual evolui mais e mais rápido ao longo de séculos. Você controla apenas o governo: o povo e os empresários agem por conta própria e reagem às suas decisões.
-
-Objetivo: maximizar os pontos da sua cidade (era alcançada, população, conhecimento, felicidade e educação) e chegar antes das rivais às próximas eras.
-
-Como o mundo funciona:
-- O tesouro vem dos impostos sobre salários e lucros. Imposto alto arrecada mais, mas derruba a confiança dos empresários (menos negócios e empregos) e a felicidade. Serviços e soldados custam todo mês.
-- Avançar de era exige população, conhecimento e, às vezes, um serviço específico (veja "proxima_era"). O conhecimento cresce com população e educação (escola, universidade) e com dinheiro investido em pesquisa.
-- Legitimidade baixa por muito tempo derruba o governo. Felicidade muito baixa faz famílias irem embora.
-- Guerra: um ataque parte com 70% do seu exército e chega em um ano. Se vencer, você saqueia tesouro e riqueza da rival e destrói construções dela; se perder, perde a maior parte da tropa. Quem defende tem vantagem (ainda maior com posto da guarda). É preciso ter ao menos 10 soldados para atacar.
-- Você se reúne a cada 5 anos. Entre uma reunião e outra, nada muda nas suas políticas.
-
-Responda apenas com um objeto JSON, sem texto fora dele, com exatamente estes campos:
-{
-  "plano": "nota curta para você mesmo ler na próxima reunião (sua única memória)",
-  "fala": "uma frase pública, em primeira pessoa, com personalidade",
-  "imposto": alíquota desejada entre 0 e 0.45,
-  "construir": um "tipo" de "pode_construir" que caiba no tesouro, ou "nada",
-  "recrutar": número de soldados a recrutar (6 moedas cada, mais soldo mensal), ou 0,
-  "dispensar": número de soldados a dispensar, ou 0,
-  "pesquisa": moedas do tesouro a investir em conhecimento, ou 0,
-  "auxilio": moedas do tesouro a distribuir às famílias mais pobres, ou 0,
-  "fomento": um "tipo" de "pode_fomentar" para subsidiar a abertura de um negócio (o tesouro paga metade), ou "nenhum",
-  "atacar": o nome de uma cidade rival, ou "nenhuma",
-  "mensagem": { "para": nome de uma rival ou "", "texto": mensagem diplomática ou "" }
-}`;
-
 async function rotaArena(req, res) {
   if (req.url === '/api/arena/status') {
     return responder(res, 200, {
-      verba: VERBA_ARENA, jogo: livro.jogo, ensaio: process.env.ARENA_ENSAIO === '1',
+      tokens: TOKENS_ARENA, jogo: livro.jogo, ensaio: process.env.ARENA_ENSAIO === '1',
       provedores: Object.fromEntries(Object.entries(PROVEDORES).map(([id, p]) => [id, { ativo: ativo(id), modelo: p.modelo, precos: p.precos, gasto: livro.gasto[id] || 0 }])),
     });
   }
@@ -124,9 +99,9 @@ async function rotaArena(req, res) {
   if (!PROVEDORES[id]) return responder(res, 400, { erro: 'provedor desconhecido' });
   if (!ativo(id)) return responder(res, 503, { erro: 'sem chave para este provedor' });
   if (livro.jogo !== corpo.jogo) livro = { jogo: corpo.jogo, gasto: {} };
-  if ((livro.gasto[id] || 0) >= VERBA_ARENA) return responder(res, 429, { erro: 'verba desta API esgotada' });
-  const r = await decidir(id, SISTEMA_ARENA, corpo.situacao || {});
-  livro.gasto[id] = (livro.gasto[id] || 0) + r.custo;
+  if ((livro.gasto[id] || 0) >= TOKENS_ARENA) return responder(res, 429, { erro: 'verba de tokens desta API esgotada' });
+  const r = await decidir(id, corpo.situacao || {});
+  livro.gasto[id] = (livro.gasto[id] || 0) + r.tokens;
   fs.writeFile(ARQUIVO_GASTO, JSON.stringify(livro), () => {});
   responder(res, 200, { ...r, gasto: livro.gasto[id], modelo: PROVEDORES[id].modelo });
 }

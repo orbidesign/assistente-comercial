@@ -6,8 +6,10 @@ import { ERAS } from '../sim/dados.js';
 
 export const MESES_POR_TURNO = 60;      // os governos se reúnem a cada 5 anos
 export const MESES_MILENIO = 12000;
-export const VERBA_TOTAL = 5;           // dólares por API, no jogo inteiro
-export const VERBA_MILENIO = 1;         // dólares por API, por milênio
+// A verba é em tokens, não em dinheiro: todas as APIs recebem exatamente a
+// mesma quantidade, somando o que leem, o que escrevem e o que raciocinam.
+export const TOKENS_TOTAL = 2_000_000;  // por API, no jogo inteiro
+export const TOKENS_MILENIO = 400_000;  // por API, por milênio
 export const MESES_DE_MARCHA = 12;
 export const LENTIDAO = 10;
 
@@ -24,13 +26,15 @@ function rnd(a) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-export function criarArena(semente = 1) {
+export function criarArena(semente = 1, ids = Object.keys(PROVEDORES)) {
   const a = { versao: 1, semente, rng: semente | 0, mes: 0, cidades: [], marchas: [], log: [], hist: [], marcos: [] };
-  for (const [id, p] of Object.entries(PROVEDORES)) {
+  for (const id of ids) {
+    const p = PROVEDORES[id];
     // Mesma semente para as três: todas partem exatamente da mesma situação.
     a.cidades.push({
       id, w: criarMundo(semente, { manual: true, lentidao: LENTIDAO, nome: p.cidade }),
-      gasto: 0, gastoMilenio: 0, chamadas: 0, custoMedio: 0, plano: '', fala: '', feito: [], caixa: [], batalhas: [], turnosSemVerba: 0,
+      tokens: 0, tokensMilenio: 0, mediaTokens: 0, dolares: 0, chamadas: 0, invalidas: 0, turnosSemVerba: 0,
+      proximoTurno: MESES_POR_TURNO, eras: { 0: 1 }, vitorias: 0, derrotas: 0, saqueada: 0, plano: '', fala: '', feito: [], caixa: [], batalhas: [],
     });
   }
   return a;
@@ -43,21 +47,24 @@ function registrar(a, texto, tipo, de) {
   if (a.log.length > 400) a.log.shift();
 }
 
-// Quanto esta cidade já pode ter gasto, a esta altura do milênio. A verba do
-// milênio é liberada aos poucos: modelo caro pensa menos vezes.
+// Quantos tokens já podem ter sido gastos a esta altura do milênio. A verba é
+// liberada aos poucos: quem gasta muito por reunião se reúne menos vezes.
 export function verbaLiberada(a) {
-  return 0.03 + ((a.mes % MESES_MILENIO) / MESES_MILENIO) * VERBA_MILENIO;
+  return 6000 + ((a.mes % MESES_MILENIO) / MESES_MILENIO) * TOKENS_MILENIO;
 }
 
 export function podePagar(a, c) {
-  const estimado = c.custoMedio || 0.004;
-  return c.gasto + estimado <= VERBA_TOTAL && c.gastoMilenio + estimado <= Math.min(VERBA_MILENIO, verbaLiberada(a));
+  const estimado = c.mediaTokens || 3000;
+  return c.tokens + estimado <= TOKENS_TOTAL && c.tokensMilenio + estimado <= Math.min(TOKENS_MILENIO, verbaLiberada(a));
 }
 
-export function registrarCusto(c, dolares) {
-  c.gasto += dolares; c.gastoMilenio += dolares; c.chamadas++;
-  c.custoMedio = c.custoMedio ? c.custoMedio * 0.7 + dolares * 0.3 : dolares;
+export function registrarCusto(c, tokens, dolares = 0) {
+  c.tokens += tokens; c.tokensMilenio += tokens; c.dolares += dolares; c.chamadas++;
+  c.mediaTokens = c.mediaTokens ? c.mediaTokens * 0.7 + tokens * 0.3 : tokens;
 }
+
+// Cada governo marca a própria próxima reunião (de 5 a 50 anos).
+export const naVez = (a, c) => a.mes >= c.proximoTurno;
 
 export const turnoDevido = (a) => a.mes > 0 && a.mes % MESES_POR_TURNO === 0;
 
@@ -76,7 +83,12 @@ export function situacao(a, c) {
     exercitos_a_caminho: a.marchas.filter((m) => m.para === c.id || m.de === c.id).map((m) => ({
       de: cidade(a, m.de).w.nome, para: cidade(a, m.para).w.nome, soldados: m.forca, chega_em_meses: m.chega - a.mes,
     })),
-    proximo_conselho_em_anos: MESES_POR_TURNO / 12,
+    tokens: {
+      restantes_no_milenio: Math.max(0, Math.round(TOKENS_MILENIO - c.tokensMilenio)),
+      restantes_no_jogo: Math.max(0, Math.round(TOKENS_TOTAL - c.tokens)),
+      media_gasta_por_reuniao: Math.round(c.mediaTokens || 0),
+      anos_restantes_no_milenio: Math.round((MESES_MILENIO - (a.mes % MESES_MILENIO)) / 12),
+    },
   };
 }
 
@@ -89,6 +101,8 @@ export function aplicarTurno(a, c, d) {
   c.feito = aplicarGoverno(c.w, d);
   c.plano = String(d.plano || '').slice(0, 300);
   c.fala = String(d.fala || '').slice(0, 220);
+  const anos = Math.min(50, Math.max(5, Math.round((Number(d.proxima_reuniao_anos) || 5) / 5) * 5));
+  c.proximoTurno = a.mes + anos * 12;
   if (c.fala) registrar(a, `${c.w.nome}: “${c.fala}”`, 'fala', c.id);
   if (d.mensagem && d.mensagem.texto) {
     const alvo = a.cidades.find((r) => r !== c && r.w.nome === d.mensagem.para);
@@ -129,7 +143,7 @@ function batalha(a, m) {
     aplicarEfeito(at.w, { tipo: 'legitimidade', valor: 0.05 });
     relato = `${at.w.nome} vence ${df.w.nome} e leva ${Math.round(saque)} moedas de saque.`;
     df.w.log.push({ mes: df.w.mes, texto: `A cidade foi saqueada pelas tropas de ${at.w.nome}.`, tipo: 'ruim' });
-    m.resultado = 'vitoria';
+    m.resultado = 'vitoria'; at.vitorias++; df.saqueada++;
   } else {
     ea.exercito += Math.floor(m.forca * 0.3);
     ed.exercito = Math.floor((ed.exercito || 0) * 0.75);
@@ -137,7 +151,7 @@ function batalha(a, m) {
     aplicarEfeito(df.w, { tipo: 'legitimidade', valor: 0.06 });
     relato = `${df.w.nome} repele o ataque de ${at.w.nome}.`;
     df.w.log.push({ mes: df.w.mes, texto: `As muralhas resistiram ao ataque de ${at.w.nome}.`, tipo: 'estado' });
-    m.resultado = 'derrota';
+    m.resultado = 'derrota'; at.derrotas++;
   }
   calcularIndicadores(at.w); calcularIndicadores(df.w);
   const ano = Math.floor(a.mes / 12) + 1;
@@ -155,11 +169,12 @@ export function avancarArena(a) {
     if (c.w.era !== era) {
       const primeiro = !a.marcos.some((x) => x.era === c.w.era);
       a.marcos.push({ era: c.w.era, id: c.id, ano: Math.floor(a.mes / 12) + 1 });
+      c.eras[c.w.era] = Math.floor(a.mes / 12) + 1;
       registrar(a, `${c.w.nome} chega à era ${ERAS[c.w.era].nome}${primeiro ? ' — a primeira!' : '.'}`, 'era', c.id);
     }
   }
   if (a.mes % MESES_MILENIO === 0) {
-    for (const c of a.cidades) c.gastoMilenio = 0;
+    for (const c of a.cidades) c.tokensMilenio = 0;
     registrar(a, `Começa o ${a.mes / MESES_MILENIO + 1}º milênio.`, 'era');
   }
   const travadas = [];

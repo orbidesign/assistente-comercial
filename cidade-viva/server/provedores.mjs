@@ -17,7 +17,7 @@ export const PROVEDORES = {
 const obj = (props) => ({ type: 'object', properties: props, required: Object.keys(props), additionalProperties: false });
 const ESQUEMA = obj({
   plano: { type: 'string' }, fala: { type: 'string' }, imposto: { type: 'number' }, construir: { type: 'string' },
-  recrutar: { type: 'integer' }, dispensar: { type: 'integer' }, pesquisa: { type: 'number' }, auxilio: { type: 'number' },
+  proxima_reuniao_anos: { type: 'integer' }, recrutar: { type: 'integer' }, dispensar: { type: 'integer' }, pesquisa: { type: 'number' }, auxilio: { type: 'number' },
   fomento: { type: 'string' }, atacar: { type: 'string' }, mensagem: obj({ para: { type: 'string' }, texto: { type: 'string' } }),
 });
 
@@ -89,7 +89,7 @@ function ensaio(situacao) {
     texto: JSON.stringify({
       plano: 'Ensaio: crescer e investir em saber.', fala: `Ensaio de ${v.cidade}: seguimos firmes.`, imposto: 0.1,
       construir: obra ? obra.tipo : 'nada', recrutar: v.tesouro > 150 ? 3 : 0, dispensar: 0, pesquisa: Math.max(0, v.tesouro * 0.2), auxilio: 0,
-      fomento: 'nenhum', atacar: 'nenhuma', mensagem: { para: '', texto: '' },
+      fomento: 'nenhum', atacar: 'nenhuma', mensagem: { para: '', texto: '' }, proxima_reuniao_anos: 5,
     }),
     entrada: 1500, saida: 400,
   };
@@ -104,9 +104,41 @@ export function extrairJSON(texto) {
 
 export const ativo = (id) => !!PROVEDORES[id]?.chave || env.ARENA_ENSAIO === '1';
 
-export async function decidir(id, sistema, situacao) {
+export const SISTEMA_ARENA = `Você governa uma cidade em um jogo de estratégia. Três cidades, cada uma governada por uma inteligência artificial diferente, partem de situações idênticas e disputam qual se torna a mais próspera e imponente no menor tempo. Você controla apenas o governo: o povo e os empresários agem por conta própria e reagem às suas decisões.
+
+Objetivo: maximizar os pontos da sua cidade (era alcançada, população, conhecimento, felicidade e educação) e chegar antes das rivais às próximas eras.
+
+Como o mundo funciona:
+- O tesouro vem dos impostos sobre salários e lucros. Imposto alto arrecada mais, mas derruba a confiança dos empresários (menos negócios e empregos) e a felicidade. Serviços e soldados custam todo mês.
+- Avançar de era exige população, conhecimento e, às vezes, um serviço específico (veja "proxima_era"). O conhecimento cresce com população e educação (escola, universidade) e com dinheiro investido em pesquisa.
+- Legitimidade baixa por muito tempo derruba o governo. Felicidade muito baixa faz famílias irem embora.
+- Guerra: um ataque parte com 70% do seu exército e chega em um ano. Se vencer, você saqueia tesouro e riqueza da rival e destrói construções dela; se perder, perde a maior parte da tropa. Quem defende tem vantagem (ainda maior com posto da guarda). É preciso ter ao menos 10 soldados para atacar. Atacar, defender-se, negociar ou ignorar as rivais é escolha estratégica sua.
+- Tokens são o seu recurso mais escasso. Todas as cidades têm exatamente a mesma verba de tokens (o que você lê, raciocina e escreve conta). Veja "tokens" na situação: se a verba do milênio acabar, você fica sem se reunir e suas políticas ficam congeladas. Você escolhe quando será a próxima reunião: reunir-se menos poupa tokens, reunir-se mais reage mais rápido.
+
+Responda apenas com um objeto JSON, sem texto fora dele, com exatamente estes campos:
+{
+  "plano": "nota curta para você mesmo ler na próxima reunião (sua única memória)",
+  "fala": "uma frase pública, em primeira pessoa, com personalidade",
+  "imposto": alíquota desejada entre 0 e 0.45,
+  "construir": um "tipo" de "pode_construir" que caiba no tesouro, ou "nada",
+  "recrutar": número de soldados a recrutar (6 moedas cada, mais soldo mensal), ou 0,
+  "dispensar": número de soldados a dispensar, ou 0,
+  "pesquisa": moedas do tesouro a investir em conhecimento, ou 0,
+  "auxilio": moedas do tesouro a distribuir às famílias mais pobres, ou 0,
+  "fomento": um "tipo" de "pode_fomentar" para subsidiar a abertura de um negócio (o tesouro paga metade), ou "nenhum",
+  "atacar": o nome de uma cidade rival, ou "nenhuma",
+  "mensagem": { "para": nome de uma rival ou "", "texto": mensagem diplomática ou "" },
+  "proxima_reuniao_anos": daqui a quantos anos você volta a se reunir (5 a 50, em múltiplos de 5)
+}`;
+
+// Tokens são contados como cada API os informa: entrada + saída, com o
+// raciocínio incluído na saída. Uma resposta que não é JSON válido também é
+// cobrada: quem erra o formato perde a reunião e os tokens.
+export async function decidir(id, situacao) {
   const cfg = PROVEDORES[id];
-  const r = env.ARENA_ENSAIO === '1' ? ensaio(situacao) : await CHAMAR[id](cfg, sistema, JSON.stringify(situacao));
+  const r = env.ARENA_ENSAIO === '1' ? ensaio(situacao) : await CHAMAR[id](cfg, SISTEMA_ARENA, JSON.stringify(situacao));
   const custo = (r.entrada * cfg.precos[0] + r.saida * cfg.precos[1]) / 1e6;
-  return { decisao: extrairJSON(r.texto), custo, tokens: { entrada: r.entrada, saida: r.saida } };
+  let decisao = null;
+  try { decisao = extrairJSON(r.texto); } catch { /* resposta inválida */ }
+  return { decisao, invalida: !decisao, custo, tokens: r.entrada + r.saida, entrada: r.entrada, saida: r.saida };
 }

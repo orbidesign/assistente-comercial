@@ -70,11 +70,14 @@ npm run arena:simular -- 7 600     # disputa sem tela, só com governos de regra
   soldados, dinheiro para pesquisa, auxílio aos pobres, fomento a um negócio,
   uma mensagem diplomática, atacar uma rival, uma fala pública e uma nota para
   si mesmo (a única memória entre reuniões).
-- **Verba.** US$ 5 por API no jogo inteiro e no máximo US$ 1 por milênio,
-  liberado aos poucos ao longo do milênio. Modelo mais caro paga menos reuniões;
-  na reunião que não pode pagar, as políticas ficam como estavam. O servidor
-  conta o gasto de cada API em disco (`.arena-gasto.json`) e recusa chamadas
-  acima do teto.
+- **Verba em tokens.** Para a disputa ser justa, a verba não é em dinheiro: as
+  três APIs recebem a mesma quantidade de tokens, 2 milhões no jogo inteiro e
+  no máximo 400 mil por milênio, liberados aos poucos. Conta tudo o que a IA
+  lê, raciocina e escreve, como cada API informa. Cada governo marca a própria
+  próxima reunião (de 5 a 50 anos): pensar muito ou se reunir demais esgota a
+  verba, e sem verba as políticas ficam congeladas. Resposta que não é JSON
+  válido perde a reunião e os tokens. O servidor conta os tokens em disco
+  (`.arena-gasto.json`) e recusa chamadas acima do teto.
 - **Guerra.** Um ataque leva 70% do exército e chega em um ano. Vitória rende
   saque e destrói construções da rival; derrota custa a maior parte da tropa.
   Quem defende tem vantagem.
@@ -92,13 +95,45 @@ Modelos e preços são configuráveis, porque mudam com frequência:
 | `ARENA_MODELO_ANTHROPIC` / `ARENA_PRECO_ANTHROPIC` | `claude-sonnet-5-5` / `2,10` |
 | `ARENA_MODELO_XAI` / `ARENA_PRECO_XAI` | `grok-4.7` / `2,6` |
 | `ARENA_MODELO_GEMINI` / `ARENA_PRECO_GEMINI` | `gemini-3.1-pro` / `2,12` |
-| `ARENA_VERBA_USD` | `5` |
+| `ARENA_TOKENS` | `2000000` |
 
-Os preços são dólares por milhão de tokens de entrada e de saída. Os padrões
-põem os três na mesma faixa (cerca de US$ 2 de entrada). Os identificadores e
+Os preços (dólares por milhão de tokens de entrada e de saída) servem só para
+mostrar quanto a partida custou; não entram nas regras. Os identificadores e
 preços de Grok e Gemini vieram de páginas de terceiros, não das tabelas
 oficiais: confira antes de jogar valendo. `ARENA_ENSAIO=1` roda o fluxo
 inteiro com respostas simuladas, sem chamar nem gastar nada.
+
+### Como saber qual é mais inteligente
+
+Uma partida só é anedota: há sorte nos dados da simulação e nas batalhas. O
+que vale é o torneio, que repete a disputa em várias sementes e resume.
+
+```bash
+npm run torneio -- --modo solo  --sementes 10 --anos 300
+npm run torneio -- --modo arena --sementes 10 --anos 500
+```
+
+- **Prova solo (governança).** Cada IA governa sozinha as mesmas cidades
+  iniciais, sem rivais. Entram duas referências: `regras` (governo de regras) e
+  `ausente` (ninguém governa). Responde "quem faz a cidade prosperar mais
+  rápido" sem a interferência da guerra.
+- **Prova arena (estratégia).** As três juntas, com diplomacia e guerra.
+- **O que é medido.** Ano em que cada era é alcançada, pontos em marcos fixos
+  e no fim, componentes separados (população, saber, felicidade, educação,
+  riqueza, desigualdade), tokens gastos, pontos por 100 mil tokens, respostas
+  inválidas e, na arena, guerras vencidas e perdidas.
+- **Como ler.** A tabela traz média e desvio entre sementes. Diferença menor
+  que o desvio não permite conclusão; rode mais sementes. O arquivo completo
+  de cada torneio fica em `resultados/`.
+
+Com 4 sementes e 300 anos, o governo de regras fez 2.254 pontos em média
+(desvio 612) contra 886 da cidade sem governo: a medida responde a governo, e
+uma IA só "é inteligente" aqui se superar as regras com folga.
+
+Limites do método: cada API conta tokens com o próprio tokenizador, então a
+mesma frase pode valer um pouco mais ou menos em cada uma; o resultado vale
+para os modelos configurados, não para a empresa; e os pontos são uma fórmula
+escolhida, por isso os componentes são reportados separados.
 
 Verificado: a lógica (testes de determinismo, guerra, verba e decisões
 malformadas), a tela em desktop, iPhone e iPad emulados, com governos de regras
