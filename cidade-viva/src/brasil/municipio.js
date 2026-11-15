@@ -166,7 +166,6 @@ export function cenarioDoAno(semente, ano) {
     cen.clima = forca;
     cen.eventos.push({ tipo: 'clima', texto: r() < 0.6 ? 'Chuvas extremas e enchentes na região.' : 'Seca severa e onda de calor na região.' });
   }
-  if (r() < 0.012) cen.eventos.push({ tipo: 'pandemia', texto: 'Emergência sanitária nacional.' });
   // Automação: de 2032 a 2060, empregos de rotina são substituídos.
   cen.automacao = ano >= 2032 && ano <= 2060 ? 0.012 * Math.sin(((ano - 2032) / 28) * Math.PI) : 0;
   // Demografia nacional: a população do país para de crescer por volta de 2041.

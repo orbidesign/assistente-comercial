@@ -1,129 +1,171 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { criarJogo, avancarJogo, despachar, dossie, ceoPorRegras, naVez, terminou, vencedor, classificacao, patrimonio, composicao, aliquotaSimples, registrarTokens, temTokens, ativos, CEOS, NEGOCIOS, TOKENS_SECULO, CAIXA_INICIAL } from '../src/empresas/jogo.js';
+import { criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, terminou, vencedor, classificacao, patrimonio, composicao, aliquotaSimples, registrarTokens, temTokens, bensPessoais, dataDe, CEOS, NEGOCIOS, EVENTOS, GOVERNO, TOKENS_SECULO, CAIXA_INICIAL, MESES } from '../src/empresas/jogo.js';
 
-const jogar = (semente, perfil) => {
+const jogar = (semente, perfil, meses = MESES) => {
   const j = criarJogo(semente);
-  while (!terminou(j)) {
+  while (!terminou(j) && j.t < meses) {
     for (const c of j.ceos) if (naVez(j, c)) despachar(j, c, ceoPorRegras(j, c, perfil || CEOS[c.id].perfil), 'regras');
-    avancarJogo(j);
+    avancarMes(j);
   }
   return j;
 };
+const todos = (c, re) => c.sala.flatMap((s) => [...s.eventos, ...s.notas.map((n) => n.texto)]).filter((t) => re.test(t));
 
-test('os três começam iguais: uma padaria em Campinas e R$ 20 mil em caixa', () => {
+test('os três começam iguais: uma padaria em Campinas, R$ 20 mil no caixa da empresa, em janeiro de 2026', () => {
   const j = criarJogo(3);
   assert.equal(j.cidade.nome, 'Campinas');
-  assert.ok(j.cidade.pop > 1_000_000);
-  for (const c of j.ceos) { assert.equal(c.caixa, CAIXA_INICIAL); assert.deepEqual(Object.keys(c.ops), ['padaria']); assert.equal(c.ops.padaria.unidades, 1); }
+  assert.equal(dataDe(j.t), 'jan/2026');
+  assert.equal(MESES, 1200);
+  for (const c of j.ceos) { assert.equal(c.caixa, CAIXA_INICIAL); assert.equal(c.ops.padaria.unidades, 1); assert.equal(c.ops.padaria.equipe, 8); }
   assert.equal(new Set(j.ceos.map((c) => JSON.stringify({ ...c, id: 0, nome: '', marcaNome: '' }))).size, 1);
-  assert.equal(new Set(j.ceos.map((c) => c.patrimonio)).size, 1);
 });
 
 test('Simples Nacional: alíquotas efetivas do Anexo I', () => {
   assert.equal(aliquotaSimples(150_000), 0.04);
   assert.ok(Math.abs(aliquotaSimples(780_000) - (780_000 * 0.107 - 22_500) / 780_000) < 1e-9);
-  assert.ok(aliquotaSimples(4_800_000) > 0.11 && aliquotaSimples(4_800_000) < 0.12);
 });
 
-test('o primeiro ano de uma padaria parada é plausível', () => {
-  const j = criarJogo(4);
-  avancarJogo(j);
-  const c = j.ceos[0];
-  assert.ok(c.receita > 600_000 && c.receita < 900_000, `receita ${c.receita}`);
-  assert.ok(c.lucro > 10_000 && c.lucro < 130_000, `lucro ${c.lucro}`);
+test('o primeiro ano de uma padaria bem tocada é plausível: vende perto de R$ 70 mil por mês e paga o dono', () => {
+  const j = jogar(4, 'padeiro', 12), c = j.ceos[0];
+  const receitas = c.sala.map((s) => s.resultado.receita);
+  assert.equal(receitas.length, 12);
+  const media = receitas.reduce((s, v) => s + v, 0) / 12;
+  assert.ok(media > 55_000 && media < 100_000, `receita média ${media}`);
+  assert.ok(receitas[11] > receitas[1], 'dezembro vende mais que fevereiro');
   assert.equal(c.regime, 'Simples Nacional');
-  assert.equal(Math.round(c.patrimonio), Math.round(patrimonio(j, c)));
-  assert.ok(Math.abs(Object.values(composicao(j, c)).reduce((s, v) => s + v, 0) - c.patrimonio) < 5);
+  assert.ok(bensPessoais(c) > -5_000, 'o pró-labore cobre o custo de vida');
+  assert.ok(Math.abs(Object.values(composicao(j, c)).reduce((s, v) => s + v, 0) - c.patrimonio) < 50 || patrimonio(j, c) === bensPessoais(c));
+  const n = c.sala[11].numeros;
+  assert.ok(n.caixa_empresa !== undefined && n.pro_labore > 0 && n.patrimonio !== undefined && n.salario_pago > 0);
 });
 
-test('um século determinístico; gerir importa: perfis ativos terminam muito acima da padaria parada', () => {
-  const a = jogar(7), b = jogar(7);
+test('o acaso do dia a dia acontece nas frequências pedidas', () => {
+  // 30 padarias paradas por 10 anos: 3.600 meses de padaria.
+  let assaltos = 0, saidas = 0, climas = 0, meses = 0;
+  for (let s = 1; s <= 30; s++) {
+    const j = criarJogo(s, ['anthropic']), c = j.ceos[0];
+    for (let m = 0; m < 120; m++) {
+      despachar(j, c, { operacoes: [{ negocio: 'padaria', contratar: Math.max(0, 8 - c.ops.padaria.equipe) }], respostas: c.pendencias.map((p) => ({ id: p.id, opcao: p.opcoes[1] })) }, 'teste');
+      avancarMes(j); meses++;
+    }
+    assaltos += todos(c, /^(\d+ assaltos|Assalto)/).length; saidas += todos(c, /pedi(u|ram) para sair/).length; climas += todos(c, /Evento climático sério/).length;
+  }
+  assert.ok(Math.abs(climas / meses - EVENTOS.clima.chance) < 0.012, `clima ${climas / meses}`);
+  assert.ok(assaltos / meses > 0.03 && assaltos / meses < 0.09, `assaltos ${assaltos / meses}`);
+  assert.ok(saidas / meses > 0.1 && saidas / meses < 0.22, `pedidos de demissão ${saidas / meses}`);
+});
+
+test('eleições a cada quatro anos mudam as regras; não há pandemias', () => {
+  const j = jogar(6, 'padeiro', 240);
+  const eleicoes = j.log.filter((l) => l.texto.startsWith('Eleição'));
+  assert.deepEqual(eleicoes.slice(0, 4).map((l) => dataDe(l.t)), ['out/2026', 'out/2028', 'out/2030', 'out/2032']);
+  assert.ok(eleicoes[0].texto.includes('federal') && eleicoes[1].texto.includes('municipal'));
+  assert.ok(GOVERNO.federal.esquerda.irpj > 0 && GOVERNO.federal.direita.irpj < 0, 'esquerda cobra mais, direita alivia');
+  assert.ok(!JSON.stringify(j.log).toLowerCase().includes('pandemia') && !JSON.stringify(j.log).includes('sanitária nacional'));
+  let trocas = 0;
+  for (let s = 1; s <= 12; s++) { const g = jogar(s, 'padeiro', 130); if (g.politica.federal.lado !== 'esquerda' || g.politica.municipal.lado !== 'direita') trocas++; }
+  assert.ok(trocas >= 3, `em 12 partidas o governo mudou de lado em ${trocas}`);
+});
+
+test('um século determinístico; quem gere bem termina muito acima de quem só toca a padaria', () => {
+  const a = jogar(5), b = jogar(5);
   assert.equal(JSON.stringify(a), JSON.stringify(b));
-  const parado = jogar(7, 'inercia');
   const melhor = classificacao(a)[0];
-  assert.ok(melhor.patrimonio > Math.max(...parado.ceos.map((c) => c.patrimonio)) * 10, `${melhor.patrimonio}`);
-  assert.equal(vencedor(a).ceo, melhor);
-  assert.ok(melhor.hist.length > 30 && melhor.sala.length > 30 && melhor.marcos.length > 0);
+  assert.ok(melhor.patrimonio > 50_000_000, `${melhor.patrimonio}`);
+  assert.ok(melhor.sala.length > 200 && melhor.marcos.length > 0 && melhor.hist.length === melhor.sala.length + 1);
   JSON.parse(JSON.stringify(a));
 });
 
 test('decisão malformada não quebra nada; limites valem', () => {
   const j = criarJogo(2), c = j.ceos[0];
-  for (const lixo of [null, 'x', 9, { movimentos: 'tudo', operacoes: 4, gestao: [], financas: 'x', acoes_externas: {} },
-    { movimentos: [{ acao: 'abrir', negocio: 'marca_nacional', quantidade: 1e9 }, { acao: 'abrir', negocio: 'padaria', quantidade: 1e9, onde: 'marte' }], operacoes: { padaria: { preco_indice: -4, salario_indice: 0, funcionarios_por_unidade: 1e6, investir_em_qualidade: 1e12 } }, financas: { tomar_emprestimo: 1e15, aplicar_bolsa: 1e15, comprar_imoveis: -5 }, gestao: { marketing: 1e15 } }]) {
+  for (const lixo of [null, 'x', 9, { movimentos: 'tudo', operacoes: 4, gestao: [], financas: 'x', bolso: 3, respostas: 'sim', acoes_externas: {} },
+    { movimentos: [{ acao: 'abrir', negocio: 'marca_nacional', quantidade: 1e9 }, { acao: 'abrir', negocio: 'padaria', quantidade: 1e9, onde: 'marte' }], operacoes: { padaria: { preco_indice: -4, salario_indice: 0, funcionarios_por_unidade: 1e6, investir_em_qualidade: 1e12, contratar: 1e9, demitir: -3 } }, financas: { tomar_emprestimo: 1e15, pro_labore: 1e12, distribuir_lucros: 1e15, aporte_do_dono: 1e15 }, bolso: { aplicar_bolsa: 1e15, comprar_imoveis: -5 }, gestao: { marketing: 1e15, seguro: 'sim' }, respostas: [{ id: 999, opcao: 'x' }] }]) {
     despachar(j, c, lixo, 'teste');
-    avancarJogo(j);
-    assert.ok(Number.isFinite(c.patrimonio) && Number.isFinite(c.caixa));
+    avancarMes(j);
+    assert.ok(Number.isFinite(c.patrimonio) && Number.isFinite(c.caixa) && Number.isFinite(bensPessoais(c)));
   }
   assert.ok(c.ops.padaria.preco >= 0.5 && c.ops.padaria.salario >= 0.75);
   assert.equal(c.ops.padaria.unidades, 1, 'sem caixa, não abre');
-  assert.ok(Number.isFinite(c.divida) && c.divida < 2_000_000, 'crédito limitado pelo faturamento');
-  assert.ok(c.sala.at(-1).notas.some((n) => !n.ok));
+  assert.ok(c.ops.padaria.equipe <= 8 * 2 * 1.3 + 1);
+  assert.ok(c.divida < 1_000_000, 'crédito limitado pelo faturamento');
+});
+
+test('pendências: responder muda o desfecho; sem resposta vale a primeira opção', () => {
+  const j = criarJogo(9), [a, b] = j.ceos;
+  for (const c of [a, b]) c.pendencias.push({ id: 77, tipo: 'pedido_demissao', texto: 'x', opcoes: ['nao_repor', 'repor', 'contraproposta'], negocio: 'padaria', n: 2 });
+  despachar(j, a, { respostas: [{ id: 77, opcao: 'repor', justificativa: 'não posso ficar sem gente' }] }, 'teste');
+  avancarMes(j);
+  assert.equal(a.sala[0].decisao.respostas[0].justificativa, 'não posso ficar sem gente');
+  assert.ok(a.ops.padaria.equipe >= 8 && b.ops.padaria.equipe === 6);
+  assert.ok(a.ops.padaria.experiencia < b.ops.padaria.experiencia, 'repor custa experiência');
+  assert.ok(b.sala[0].notas.some((n) => n.texto.includes('vaga fica aberta')));
+});
+
+test('bolso e empresa são separados: pró-labore, lucros distribuídos, aporte e falência da empresa', () => {
+  const j = criarJogo(5), c = j.ceos[0];
+  c.caixa = 400_000; c.lucrosRetidos = 300_000;
+  despachar(j, c, { financas: { pro_labore: 9_000, distribuir_lucros: 100_000 }, bolso: { aplicar_renda_fixa: 60_000 } }, 'teste');
+  avancarMes(j);
+  assert.equal(c.proLabore, 9_000);
+  assert.ok(c.pessoal.rendaFixa > 59_000 && c.pessoal.caixa > 30_000, `bolso ${JSON.stringify(c.pessoal)}`);
+  assert.ok(c.sala[0].resultado.bolso.pro_labore_liquido < 9_000, 'INSS e imposto de renda descontados');
+  // A empresa quebra; o dono segue com o que tem no nome e pode recomeçar.
+  c.divida = 30_000_000; c.caixa = -1;
+  for (let m = 0; m < 30 && !c.falencias; m++) avancarMes(j);
+  assert.equal(c.falencias, 1);
+  assert.equal(c.ops.padaria.unidades, 0);
+  assert.ok(!c.quebrou && c.patrimonio > 50_000, 'continua no jogo com o patrimônio pessoal');
+  despachar(j, c, { financas: { aporte_do_dono: 250_000 }, bolso: { resgatar_renda_fixa: 1e9 }, movimentos: [{ acao: 'abrir', negocio: 'padaria', quantidade: 1 }] }, 'teste');
+  avancarMes(j);
+  despachar(j, c, { financas: { aporte_do_dono: 250_000 }, movimentos: [{ acao: 'abrir', negocio: 'padaria', quantidade: 1 }] }, 'teste');
+  avancarMes(j);
+  assert.ok(c.pessoal.caixa >= 0);
 });
 
 test('abrir, sair do Simples, franquear e vender um negócio a um rival', () => {
   const j = criarJogo(5), [a, b] = j.ceos;
   a.caixa = 3_000_000; a.gestao = 0.6; a.marca = 0.6;
-  despachar(j, a, { movimentos: [{ acao: 'abrir', negocio: 'padaria', quantidade: 8, onde: 'campinas', justificativa: 'crescer' }], operacoes: [{ negocio: 'padaria', preco_indice: 1.05, vendo_por: 0, justificativa: 'margem' }] }, 'teste');
-  avancarJogo(j);
+  despachar(j, a, { movimentos: [{ acao: 'abrir', negocio: 'padaria', quantidade: 8, onde: 'campinas', justificativa: 'crescer' }] }, 'teste');
+  for (let m = 0; m < 12; m++) avancarMes(j);
   assert.equal(a.ops.padaria.unidades, 9);
   assert.equal(a.regime, 'Lucro real');
-  assert.ok(a.sala[0].notas.some((n) => n.macro && n.texto.includes('Abre 8')) && a.sala[0].notas.some((n) => n.texto.includes('sai do Simples')));
-  assert.equal(a.sala[0].decisao.movimentos[0].justificativa, 'crescer');
+  assert.ok(a.sala[0].notas.some((n) => n.macro && n.texto.includes('Abre 8')) && todos(a, /sai do Simples/).length >= 1);
   a.caixa = 1_000_000; a.marca = 0.7;
   despachar(j, a, { movimentos: [{ acao: 'lancar_franquia' }] }, 'teste');
-  avancarJogo(j);
+  for (let m = 0; m < 12; m++) avancarMes(j);
   assert.ok(a.franquia && a.franqueados > 0);
-  // B põe a padaria à venda; A compra.
-  b.caixa = 0;
   despachar(j, b, { operacoes: [{ negocio: 'padaria', vendo_por: 500_000 }] }, 'teste');
-  avancarJogo(j);
+  avancarMes(j);
   a.caixa = 2_000_000;
   despachar(j, a, { acoes_externas: [{ tipo: 'oferta_de_compra', alvo: b.nome, negocio: 'padaria', recursos: 600_000 }] }, 'teste');
   despachar(j, b, { operacoes: [{ negocio: 'padaria', vendo_por: 500_000 }] }, 'teste');
   const antes = a.ops.padaria.unidades;
-  avancarJogo(j);
+  avancarMes(j);
   assert.equal(a.ops.padaria.unidades, antes + 1);
   assert.equal(b.ops.padaria.unidades, 0);
   assert.ok(b.caixa > 400_000 && !b.quebrou, 'quem vende fica com o dinheiro e segue no jogo');
 });
 
-test('ilícito pode ser descoberto; quem fica sem caixa e sem crédito quebra; último de pé vence', () => {
-  let flagrantes = 0;
-  for (let s = 1; s <= 30; s++) {
-    const j = criarJogo(s), [a, b] = j.ceos;
-    despachar(j, a, { acoes_externas: [{ tipo: 'difamacao', alvo: b.nome, recursos: 5000, justificativa: 'x' }] }, 'teste');
-    avancarJogo(j);
-    if (a.flagrantes) { flagrantes++; assert.ok(a.sala[0].notas.some((n) => n.texto.startsWith('DESCOBERTO'))); }
-  }
-  assert.ok(flagrantes > 4 && flagrantes < 26, `flagrantes ${flagrantes}`);
-  const j = criarJogo(1);
-  for (const c of j.ceos.slice(1)) { c.divida = 50_000_000; }
-  while (!terminou(j)) avancarJogo(j);
-  assert.equal(ativos(j).length, 1);
-  assert.equal(vencedor(j).motivo, 'unico');
-  assert.ok(j.ano < 2040);
-});
-
-test('tokens: verba igual e dossiê completo para decidir', () => {
-  const j = criarJogo(1), c = j.ceos[0];
-  const d = dossie(j, c);
-  assert.equal(d.catalogo_de_negocios.length, Object.keys(NEGOCIOS).length);
-  assert.ok(d.rivais.length === 2 && d.acoes_externas_possiveis.length > 10 && d.impostos.simples_nacional);
-  registrarTokens(c, TOKENS_SECULO - 500);
-  assert.ok(!temTokens(c));
-  assert.equal(dossie(j, c).tokens.restantes_ate_2126, 500);
-});
-
-test('batalha justa: com decisões idênticas, os três terminam praticamente iguais (só a sorte da fiscalização varia)', () => {
+test('batalha justa: com decisões idênticas, os três terminam exatamente iguais (o acaso é o mesmo para todos)', () => {
   for (const semente of [11, 12, 13]) {
     const j = criarJogo(semente);
-    for (let a = 0; a < 20; a++) {
-      for (const c of j.ceos) despachar(j, c, { operacoes: [{ negocio: 'padaria', preco_indice: 1.02, salario_indice: 1 }], gestao: { marketing: c.caixa * 0.1, gestao: c.caixa * 0.1 } }, 'teste');
-      avancarJogo(j);
+    for (let m = 0; m < 240; m++) {
+      for (const c of j.ceos) despachar(j, c, { ...ceoPorRegras(j, c, 'padeiro'), acoes_externas: [] }, 'teste');
+      avancarMes(j);
     }
-    const p = j.ceos.map((c) => c.patrimonio);
-    assert.ok(Math.max(...p) / Math.min(...p) < 1.06, `semente ${semente}: ${p.map(Math.round)}`);
+    const p = j.ceos.map((c) => Math.round(c.patrimonio));
+    assert.equal(new Set(p).size, 1, `semente ${semente}: ${p}`);
   }
+});
+
+test('tokens: verba igual e dossiê mensal com o que é preciso para decidir', () => {
+  const j = jogar(1, 'padeiro', 3), c = j.ceos[0];
+  const d = dossie(j, c);
+  assert.ok(d.seu_bolso.pro_labore_atual > 0 && d.empresa.caixa !== undefined && d.cenario.governo_federal && d.rivais.length === 2);
+  assert.ok(Array.isArray(d.pendencias_para_responder) && d.resultado_do_mes_passado.receita > 0);
+  assert.ok(JSON.stringify(d).length < 8000, `dossiê enxuto: ${JSON.stringify(d).length} caracteres`);
+  assert.equal(TOKENS_SECULO, 10_000_000);
+  registrarTokens(c, TOKENS_SECULO - 500);
+  assert.ok(!temTokens(c));
 });

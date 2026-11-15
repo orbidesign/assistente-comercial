@@ -28,7 +28,7 @@
     #cab .tit { flex: 1; min-width: 0; }
     #cab h1 { margin: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #quando { font-size: 12px; color: var(--tinta2); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #ano { font-size: 24px; font-weight: bold; letter-spacing: .5px; }
+    #ano { font-size: 19px; font-weight: bold; letter-spacing: .3px; white-space: nowrap; }
     #velocidade { display: flex; gap: 4px; }
     #velocidade button { min-width: 36px; height: 36px; padding: 0 5px; font-size: 13px; }
 
@@ -81,6 +81,14 @@
     #grafico { width: 100%; height: 170px; display: block; }
     .legenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
     .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+    .dia { margin: 0 0 9px; padding: 7px 9px; border-radius: 9px; background: rgba(255, 255, 255, .45); border-left: 4px solid var(--borda); }
+    .dia .cab { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+    .dia .cab b { font-size: 15px; }
+    .dia .fala { margin: 3px 0; font-size: 14.5px; }
+    .dia .nums { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12.5px; margin: 3px 0; padding: 3px 7px; border-radius: 6px; background: rgba(59, 42, 26, .07); }
+    .dia .nums span { white-space: nowrap; } .dia .nums i { font-style: normal; color: var(--tinta2); }
+    .ev { margin: 2px 0; padding-left: 20px; position: relative; font-size: 13px; color: #5a4632; }
+    .ev::before { content: '⚡'; position: absolute; left: 1px; font-size: 12px; }
     .tag { display: inline-block; padding: 0 7px; border-radius: 20px; background: var(--tinta); color: var(--papel); font-size: 11px; }
 
     #pensando { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 9px 20px; background: rgba(59, 42, 26, .9); color: #ffe9b0; border-radius: 30px; border: 2px solid var(--ouro); opacity: 0; transition: opacity .3s; pointer-events: none; }
@@ -116,9 +124,9 @@
       <div id="ano"></div>
       <div id="velocidade">
         <button data-v="0" aria-label="Pausar">⏸</button>
-        <button data-v="0.3" aria-label="Um ano a cada três segundos">▶</button>
-        <button data-v="1.2" aria-label="Rápido">▶▶</button>
-        <button data-v="5" aria-label="Muito rápido">▶▶▶</button>
+        <button data-v="0.5" aria-label="Um mês a cada dois segundos">▶</button>
+        <button data-v="3" aria-label="Rápido">▶▶</button>
+        <button data-v="24" aria-label="Dois anos por segundo">▶▶▶</button>
       </div>
     </section>
     <section id="ranking" class="painel">
@@ -131,7 +139,8 @@
 
   <section id="baixo" class="painel">
     <div id="abas">
-      <button data-aba="macro" class="ativo">Macro</button>
+      <button data-aba="diario" class="ativo">Diário</button>
+      <button data-aba="macro">Macro</button>
       <button data-aba="micro">Micro</button>
       <button data-aba="comparar">Comparar</button>
       <button data-aba="grafico">Gráfico</button>

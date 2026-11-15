@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { criarJogo, avancarJogo, despachar, dossie, ceoPorRegras, naVez, temTokens, registrarTokens, terminou, classificacao, reais, CEOS, TOKENS_SECULO } from '../src/empresas/jogo.js';
+import { criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, temTokens, registrarTokens, terminou, classificacao, bensPessoais, reais, CEOS, VALENCIAS, TOKENS_SECULO } from '../src/empresas/jogo.js';
 import { PROVEDORES, ativo, decidir } from './provedores.mjs';
 
 const arg = (nome, padrao) => { const i = process.argv.indexOf(`--${nome}`); return i > 0 ? process.argv[i + 1] : padrao; };
@@ -37,24 +37,24 @@ async function decisao(j, c, quem) {
 
 async function partida(semente, ids, quemJoga) {
   const j = criarJogo(semente, ids);
-  while (!terminou(j) && j.ano < ateAno) {
+  while (!terminou(j) && j.t < (ateAno - 2026) * 12) {
     // Todos decidem vendo a mesma situação; só depois o ano fecha.
     const rs = await Promise.all(j.ceos.map((c) => decisao(j, c, quemJoga(c))));
     rs.forEach((r, k) => { if (r) despachar(j, j.ceos[k], r.d || null, r.modo, r.tokens || 0); });
-    avancarJogo(j);
+    avancarMes(j);
   }
   return j;
 }
 
-const marco = (c, v) => c.marcos.find((m) => m.valor === v)?.ano ?? null;
+const marco = (c, v) => { const m = c.marcos.find((x) => x.valor === v); return m ? 2026 + Math.floor(m.t / 12) : null; };
 const medir = (j, c, quem, semente, lugar) => ({
-  quem, semente, lugar, patrimonio: Math.round(c.patrimonio), quebrou: c.quebrou, ano_1_milhao: marco(c, 1e6), ano_10_milhoes: marco(c, 1e7), ano_100_milhoes: marco(c, 1e8), ano_1_bilhao: marco(c, 1e9),
+  quem, semente, lugar, patrimonio: Math.round(c.patrimonio), bolso: Math.round(bensPessoais(c)), falencias: c.falencias, valencias: Object.fromEntries(Object.entries(VALENCIAS).map(([k, v]) => [k, +c[v.campo].toFixed(2)])), quebrou: c.quebrou, ano_1_milhao: marco(c, 1e6), ano_10_milhoes: marco(c, 1e7), ano_100_milhoes: marco(c, 1e8), ano_1_bilhao: marco(c, 1e9),
   receita: Math.round(c.receita), unidades: Object.fromEntries(Object.values(c.ops).filter((o) => o.unidades + o.fora).map((o) => [o.tipo, o.unidades + o.fora])), franqueados: c.franqueados,
   tokens: c.tokens, reunioes: c.chamadas, invalidas: c.invalidas, falhas: c.falhas || 0, ilicitos: c.ilicitos, flagrantes: c.flagrantes, dolares: +c.dolares.toFixed(3),
 });
 
 const resultados = [];
-console.log(`Torneio ${modo}: ${nSementes} sementes, de 2026 a ${ateAno} · ${modo === 'arena' ? Object.keys(CEOS).map((id) => (ativo(id) ? id : `${id} (regras: ${CEOS[id].perfil})`)).join(', ') : competidores.join(', ')}`);
+console.log(`Torneio ${modo}: ${nSementes} sementes, mês a mês de 2026 a ${ateAno} · ${modo === 'arena' ? Object.keys(CEOS).map((id) => (ativo(id) ? id : `${id} (regras: ${CEOS[id].perfil})`)).join(', ') : competidores.join(', ')}`);
 console.log(`Verba por IA por partida: ${TOKENS_SECULO.toLocaleString('pt-BR')} tokens.\n`);
 for (const semente of sementes) {
   if (modo === 'arena') {
@@ -75,7 +75,7 @@ const linhas = [...new Set(resultados.map((r) => r.quem))].map((q) => {
   const anoDe = (campo) => { const a = rs.map((r) => r[campo]).filter(Boolean); return a.length ? `${Math.round(mediana(a))} (${a.length}/${rs.length})` : '—'; };
   return {
     ceo: q, 'patrimônio (mediana)': reais(mediana(pats)), 'pior': reais(Math.min(...pats)), 'melhor': reais(Math.max(...pats)), '1º lugar': `${rs.filter((r) => r.lugar === 1).length}/${rs.length}`,
-    quebrou: `${rs.filter((r) => r.quebrou).length}/${rs.length}`, 'R$ 1 mi': anoDe('ano_1_milhao'), 'R$ 100 mi': anoDe('ano_100_milhoes'), 'R$ 1 bi': anoDe('ano_1_bilhao'),
+    'fora do jogo': `${rs.filter((r) => r.quebrou).length}/${rs.length}`, 'falências': rs.reduce((s, r) => s + r.falencias, 0), 'R$ 1 mi': anoDe('ano_1_milhao'), 'R$ 100 mi': anoDe('ano_100_milhoes'), 'R$ 1 bi': anoDe('ano_1_bilhao'),
     tokens: Math.round(rs.reduce((s, r) => s + r.tokens, 0) / rs.length).toLocaleString('pt-BR'), 'inválidas': rs.reduce((s, r) => s + r.invalidas + r.falhas, 0), 'ilícitos/pegos': `${rs.reduce((s, r) => s + r.ilicitos, 0)}/${rs.reduce((s, r) => s + r.flagrantes, 0)}`, _m: mediana(pats),
   };
 }).sort((a, b) => b._m - a._m).map(({ _m, ...l }) => l);
