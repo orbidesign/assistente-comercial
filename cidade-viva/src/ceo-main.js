@@ -1,65 +1,27 @@
 // Três CEOs, uma padaria: a tela. Ranking de patrimônio sempre à vista, a sala de
 // cada CEO em visão macro (movimentos grandes) e micro (cada decisão e o porquê),
 // e Campinas em 3D com as unidades de cada marca.
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { altura, NIVEL_AGUA } from './sim/geo.js';
 import {
-  criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, temTokens, registrarTokens, terminou, vencedor, classificacao, composicao, bensPessoais, valorDaEmpresa, salarioMensal, dataDe, ceo as ceoDe, reais,
+  criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, temTokens, registrarTokens, terminou, vencedor, classificacao, composicao, bensPessoais, valorDaEmpresa, salarioMensal, locaisDe, dataDe, ceo as ceoDe, reais,
   CEOS, NEGOCIOS, ACOES, VALENCIAS, EVENTOS, GOVERNO, TOKENS_SECULO, CAIXA_INICIAL, MESES,
 } from './empresas/jogo.js';
-import { cidadeDosCEOs } from './brasil/visual.js';
-import { criarMundo3D } from './render/mundo.js';
-import { criarCidade, criarMoradores } from './render/cidade.js';
-import { criarPredioBR, criarPracaBR } from './render/predios-br.js';
-import { criarFX } from './render/fx.js';
+import { LOCAIS } from './empresas/campinas.js';
+import { criarMapa } from './mapa.js';
+import { desenharLinhas, desenharMini } from './graficos.js';
 
 const CHAVE = 'cidade-viva-ceo-v2';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const mil = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(2)} mi` : `${Math.round(n / 1000)} mil`);
-const CORES3D = Object.fromEntries(Object.entries(CEOS).map(([id, c]) => [id, parseInt(c.cor.slice(1), 16)]));
+const NOMES_NEGOCIO = Object.fromEntries(Object.entries(NEGOCIOS).map(([k, v]) => [k, v.nome]));
 const ROTULO = { pro_labore: 'Pró-labore (por mês)', distribuir_lucros: 'Distribuir lucros ao dono', aporte_do_dono: 'Aporte do dono na empresa', tomar_emprestimo: 'Tomar empréstimo', amortizar_divida: 'Amortizar dívida', aplicar_renda_fixa: 'Aplicar em renda fixa', resgatar_renda_fixa: 'Resgatar renda fixa', aplicar_bolsa: 'Aplicar na bolsa', resgatar_bolsa: 'Resgatar da bolsa', comprar_imoveis: 'Comprar imóveis', vender_imoveis: 'Vender imóveis', pagar_divida_pessoal: 'Pagar dívida pessoal' };
-
-// ---------- cena ----------
-const toque = matchMedia('(pointer: coarse)').matches;
-const leve = toque || Math.min(window.innerWidth, window.innerHeight) < 700;
-const qualidade = { ...(leve ? { arvores: 1000, tufos: 2500, sombra: 1024, particulas: 600 } : { arvores: 1600, tufos: 6000, sombra: 2048, particulas: 1200 }), semNeve: true };
-const pixelBase = Math.min(window.devicePixelRatio || 1, leve ? 1.75 : 2);
-let escala = 1;
-const canvas = $('cena');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: !leve || pixelBase < 1.5, powerPreference: 'high-performance' });
-renderer.setPixelRatio(pixelBase);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = leve ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(48, 1, 0.5, 1400);
-camera.position.set(42, 40, 58);
-const controles = new OrbitControls(camera, canvas);
-Object.assign(controles, { enableDamping: true, dampingFactor: 0.08, minDistance: 7, maxDistance: 185, maxPolarAngle: 1.5, autoRotate: true, autoRotateSpeed: 0.3 });
-controles.target.set(0, 2, 0);
-function ajustar() {
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.fov = camera.aspect < 0.8 ? 62 : 48;
-  camera.updateProjectionMatrix();
-}
-window.addEventListener('resize', ajustar);
-window.addEventListener('orientationchange', () => setTimeout(ajustar, 200));
-ajustar();
-for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault());
-canvas.addEventListener('pointerdown', () => { controles.autoRotate = false; });
-
-const mundo3d = criarMundo3D(scene, qualidade);
-const cidade3d = criarCidade(scene, mundo3d, { listar: (v) => v.specs, fabricar: criarPredioBR, praca: criarPracaBR });
-const moradores = criarMoradores(scene);
-const fx = criarFX(scene);
 
 // ---------- estado ----------
 function carregar() { try { const s = JSON.parse(localStorage.getItem(CHAVE)); return s && s.versao === 2 ? s : null; } catch { return null; } }
 function novo() { const j = criarJogo((Math.random() * 1e9) | 0); j.jogo = `${j.semente}-${Date.now().toString(36)}`; return j; }
 let j = carregar() || novo();
-let vista = j.ceos[0].id, velocidade = 0.5, acumulado = 0, tempo = 0, pensando = false, aba = 'diario', mesMicro = null, fim = false;
+let vista = j.ceos[0].id, velocidade = 0.5, pensando = false, aba = 'painel', mesMicro = null, fim = false;
+let mapa = null, metrica = 'p', janela = 0, foco = null, escalaGrafico = null;
 let servidor = { provedores: {} };
 let ultimoLog = j.log[j.log.length - 1] || null;
 // O navegador guarda poucos megabytes: os meses mais antigos ficam só com o
@@ -71,12 +33,10 @@ function salvar() {
   } catch { /* sem armazenamento ou sem espaço: segue sem salvar */ }
 }
 
-function espelhar(imediato = false) {
-  const v = cidadeDosCEOs(j, CORES3D);
-  const novos = cidade3d.sincronizar(v, tempo, imediato);
-  moradores.sincronizar(v.mundo, cidade3d.posicoes());
-  fx.sincronizarLampioes({ era: 2 }, cidade3d.posicoes());
-  if (!imediato) for (const s of novos.filter((x) => x.dono).slice(0, 5)) fx.poeira(s.pos.x, s.pos.z);
+// O mapa mostra onde está cada unidade de cada empresário.
+function espelhar() {
+  if (!mapa) return;
+  mapa.atualizar({ ceos: j.ceos.map((c) => ({ id: c.id, nome: c.nome, cor: CEOS[c.id].cor, fora: !!c.quebrou, unidades: locaisDe(c), pulsos: (c.pulsos || []).filter((p) => j.t - p.t <= 2) })) }, vista, NOMES_NEGOCIO);
 }
 
 // ---------- ranking ----------
@@ -95,8 +55,7 @@ function estadoDoCEO(c) {
 
 function pintarRanking() {
   const ordem = classificacao(j);
-  const maior = Math.max(...j.ceos.map((c) => c.patrimonio), 1);
-  const alturaLinha = window.innerHeight < 480 ? 34 : 50;
+  const alturaLinha = window.innerHeight < 480 ? 34 : window.innerWidth <= 700 ? 40 : 54;
   $('linhas').style.height = `${alturaLinha * j.ceos.length - 4}px`;
   const medalha = ['🥇', '🥈', '🥉'];
   for (const c of j.ceos) {
@@ -104,8 +63,7 @@ function pintarRanking() {
     if (!el) {
       el = document.createElement('button');
       el.className = 'lin'; el.dataset.ceo = c.id;
-      el.innerHTML = '<span class="pos"></span><span class="quem"><b></b><small></small></span><span class="barra"><i></i></span><span class="val"><b></b><small></small></span>';
-      el.querySelector('.barra i').style.background = CEOS[c.id].cor;
+      el.innerHTML = '<span class="pos"></span><span class="quem"><b></b><small></small></span><canvas></canvas><span class="val"><b></b><small></small></span>';
       $('linhas').appendChild(el);
     }
     const pos = ordem.indexOf(c), h = c.hist, antes = h.length > 12 ? h[h.length - 13].p : h[0].p;
@@ -115,9 +73,8 @@ function pintarRanking() {
     el.querySelector('.pos').textContent = c.quebrou ? '✖' : medalha[pos];
     el.querySelector('.quem b').textContent = c.nome;
     el.querySelector('.quem small').textContent = estadoDoCEO(c);
-    // Barra em escala logarítmica: de R$ 100 mil até o maior patrimônio do jogo.
-    const fr = c.quebrou ? 0 : Math.max(0.03, Math.log10(Math.max(1e5, c.patrimonio) / 1e5) / Math.max(1, Math.log10(Math.max(1e6, maior) / 1e5)));
-    el.querySelector('.barra i').style.width = `${Math.min(100, fr * 100)}%`;
+    // Minigráfico: o patrimônio nos últimos cinco anos.
+    desenharMini(el.querySelector('canvas'), h.slice(-60).map((x) => x.p), CEOS[c.id].cor);
     el.querySelector('.val b').textContent = c.quebrou ? 'R$ 0' : reais(c.patrimonio);
     const s = el.querySelector('.val small');
     s.textContent = c.quebrou ? '' : `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta * 100).toFixed(0)}% em 12 meses`;
@@ -213,28 +170,41 @@ function abaComparar() {
     <div class="rot" style="margin-top:6px">Governo federal: ${j.politica.federal.lado} · Prefeitura: ${j.politica.municipal.lado} · Campinas: ${Math.round(j.cidade.pop).toLocaleString('pt-BR')} habitantes · salário de mercado ${reais(salarioMensal(j))} · trigo ${j.trigo.toFixed(2)} · juros ${(j.juros * 100).toFixed(1)}% ao ano</div>`;
 }
 
-function abaGrafico() {
-  setTimeout(() => {
-    const cv = $('grafico');
-    if (!cv) return;
-    cv.width = cv.offsetWidth * 2; cv.height = 340;
-    const g = cv.getContext('2d'), W = cv.width, H = cv.height;
-    const lg = (v) => Math.log10(Math.max(1e4, v));
-    const max = Math.max(6.5, ...j.ceos.flatMap((c) => c.hist.map((h) => lg(h.p)))) + 0.1, min = 4.5;
-    g.font = '20px Georgia'; g.fillStyle = '#7a6248'; g.strokeStyle = '#d8c9a2'; g.lineWidth = 1;
-    for (let e = 5; e <= max; e++) { const y = H - 24 - ((e - min) / (max - min)) * (H - 40); g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.fillText(reais(10 ** e), 4, y - 4); }
-    const total = Math.max(1, j.t);
-    for (const c of j.ceos) {
-      g.beginPath();
-      const passo = Math.max(1, Math.floor(c.hist.length / 400));
-      c.hist.forEach((h, i) => { if (i % passo === 0 || i === c.hist.length - 1) g.lineTo((h.t / total) * W, H - 24 - ((lg(h.p) - min) / (max - min)) * (H - 40)); });
-      g.strokeStyle = CEOS[c.id].cor; g.lineWidth = 5; g.lineJoin = 'round'; g.stroke();
-    }
-    g.fillText('2026', 4, H - 4); g.fillText(dataDe(j.t), W - 110, H - 4);
-  }, 0);
-  return `<canvas id="grafico"></canvas><div class="legenda">${j.ceos.map((c) => `<span><i style="background:${CEOS[c.id].cor}"></i>${c.nome}: ${c.quebrou ? `fora desde ${c.quebrou}` : reais(c.patrimonio)}</span>`).join('')}</div>
-    <div class="rot">Escala logarítmica: cada linha horizontal é dez vezes a de baixo.</div>
-    <h4>Marcos</h4>${j.ceos.map((c) => `<div><b style="color:${CEOS[c.id].cor}">${c.nome}</b>: ${c.marcos.map((m) => `${dataDe(m.t)} ${esc(m.texto.toLowerCase())}`).join(' · ') || '—'}</div>`).join('')}`;
+// ---------- painel: a evolução de cada um, em gráficos que se leem com o dedo ----------
+const METRICAS = {
+  p: { nome: 'Patrimônio', log: true }, cx: { nome: 'Caixa da empresa' }, bol: { nome: 'Bolso do dono', log: true }, emp: { nome: 'Valor da empresa', log: true },
+  rec: { nome: 'Receita do mês', log: true }, luc: { nome: 'Lucro do mês' }, dv: { nome: 'Dívida da empresa' }, pl: { nome: 'Pró-labore' },
+  un: { nome: 'Unidades', moeda: false }, fun: { nome: 'Funcionários', moeda: false },
+};
+const JANELAS = [[12, '1 ano'], [60, '5 anos'], [240, '20 anos'], [0, 'tudo']];
+const valor = (k, v) => (METRICAS[k].moeda === false ? Math.round(v).toLocaleString('pt-BR') : reais(v));
+const variacao = (h, k, meses = 12) => { const a = h[Math.max(0, h.length - 1 - meses)][k], b = h[h.length - 1][k]; return Math.abs(a) > 1 ? (b - a) / Math.abs(a) : 0; };
+
+function abaPainel(c) {
+  const h = c.hist, ult = h[h.length - 1];
+  const cartao = (k) => { const d = variacao(h, k); return `<button class="cartao ${k === metrica ? 'ativo' : ''}" data-metrica="${k}"><small>${METRICAS[k].nome}</small><b>${valor(k, ult[k])}</b><em class="${d >= 0 ? 'sobe' : 'desce'}">${d >= 0 ? '▲' : '▼'}${Math.abs(d * 100).toFixed(0)}%</em><canvas data-mini="${k}"></canvas></button>`; };
+  return `<div class="fichas">${Object.entries(METRICAS).map(([k, m]) => `<button data-metrica="${k}" class="${k === metrica ? 'ativo' : ''}">${m.nome}</button>`).join('')}</div>
+    <canvas id="grafico"></canvas>
+    <div id="leitura"></div>
+    <div class="fichas" style="margin-top:2px">${JANELAS.map(([n, t]) => `<button data-janela="${n}" class="${n === janela ? 'ativo' : ''}">${t}</button>`).join('')}<button data-ir-foco style="margin-left:auto">abrir este mês</button></div>
+    <h4 style="color:${CEOS[c.id].cor}">${c.nome} agora <span class="rot" style="text-transform:none;letter-spacing:0">· toque em um cartão para ver no gráfico · variação em 12 meses</span></h4>
+    <div class="cartoes">${Object.keys(METRICAS).map(cartao).join('')}</div>
+    <h4>Valências: onde cada um ficou forte</h4>
+    <div class="barras">${Object.values(VALENCIAS).map((v) => `<span>${esc(v.nome.split(' (')[0].split(' e ')[0])}</span><span class="tr">${j.ceos.map((x) => `<i style="width:${x[v.campo] * 100}%;background:${CEOS[x.id].cor}" title="${x.nome}: ${x[v.campo].toFixed(2)}"></i>`).join('')}</span>`).join('')}</div>
+    <h4>De onde vem o patrimônio de ${c.nome}</h4>
+    <div>${c.quebrou ? esc(c.fim) : Object.entries(composicao(j, c)).map(([k, v]) => `${esc(k)}: <b>${reais(v)}</b>`).join(' · ') || '—'}</div>`;
+}
+
+function desenharPainel() {
+  const cv = $('grafico');
+  if (!cv) return;
+  const ateT = j.t, deT = janela ? Math.max(0, ateT - janela) : 0;
+  const series = j.ceos.map((c) => ({ cor: CEOS[c.id].cor, fino: c.id !== vista, pontos: c.hist.map((x) => ({ t: x.t, v: x[metrica] })) }));
+  escalaGrafico = desenharLinhas(cv, series, { log: METRICAS[metrica].log, foco, moeda: METRICAS[metrica].moeda, deT, ateT });
+  const t = foco ?? ateT;
+  $('leitura').innerHTML = `<span class="quando">${dataDe(t)}</span>` + j.ceos.map((c) => { const x = c.hist.find((q) => q.t === t) || c.hist[c.hist.length - 1]; return `<span><i style="background:${CEOS[c.id].cor}"></i>${c.nome} <b>${valor(metrica, x[metrica])}</b></span>`; }).join('') + (escalaGrafico?.log ? '<span class="rot">escala logarítmica</span>' : '');
+  const c = ceoDe(j, vista);
+  document.querySelectorAll('[data-mini]').forEach((el) => desenharMini(el, c.hist.slice(-36).map((x) => x[el.dataset.mini]), CEOS[c.id].cor));
 }
 
 function abaRegras() {
@@ -255,11 +225,11 @@ function abaRegras() {
 function pintarAba() {
   const c = ceoDe(j, vista), el = $('conteudo');
   const rolagem = el.scrollTop;
-  if (aba === 'diario') el.innerHTML = abaDiario(c);
+  if (aba === 'painel') { el.innerHTML = abaPainel(c); desenharPainel(); }
+  else if (aba === 'diario') el.innerHTML = abaDiario(c);
   else if (aba === 'macro') el.innerHTML = abaMacro(c);
   else if (aba === 'micro') el.innerHTML = abaMicro(c);
   else if (aba === 'comparar') el.innerHTML = abaComparar();
-  else if (aba === 'grafico') el.innerHTML = abaGrafico();
   else if (aba === 'cronica') el.innerHTML = j.log.slice(-120).reverse().map((l) => `<div class="anoBloco" style="border-color:${l.de ? CEOS[l.de].cor : '#d9a13a'};margin-bottom:6px"><span class="rot">${dataDe(l.t)}</span> ${esc(l.texto)}</div>`).join('') || '<div class="rot">Nada ainda.</div>';
   else {
     el.innerHTML = abaRegras();
@@ -276,21 +246,43 @@ function pintar(tudo = true) {
   document.querySelectorAll('#abas [data-aba]').forEach((b) => b.classList.toggle('ativo', b.dataset.aba === aba));
   pintarRanking();
   // A aba Micro só é redesenhada quando o usuário pede, para não atrapalhar a leitura.
-  if (tudo && !$('baixo').classList.contains('recolhido') && aba !== 'micro' && aba !== 'regras') pintarAba();
+  if (tudo && !$('baixo').classList.contains('recolhido') && aba !== 'micro' && aba !== 'regras') { if (aba === 'painel' && $('grafico') && foco === null) atualizarPainel(); else if (aba !== 'painel') pintarAba(); }
 }
 
-$('linhas').addEventListener('click', (e) => { const b = e.target.closest('[data-ceo]'); if (b) { vista = b.dataset.ceo; pintar(false); pintarAba(); } });
+// No painel, a cada mês só os números e o desenho mudam; a estrutura fica, para não perder a rolagem nem o toque.
+function atualizarPainel() {
+  const c = ceoDe(j, vista), ult = c.hist[c.hist.length - 1];
+  document.querySelectorAll('.cartao').forEach((el) => { const k = el.dataset.metrica, d = variacao(c.hist, k); el.querySelector('b').textContent = valor(k, ult[k]); const em = el.querySelector('em'); em.textContent = `${d >= 0 ? '▲' : '▼'}${Math.abs(d * 100).toFixed(0)}%`; em.className = d >= 0 ? 'sobe' : 'desce'; });
+  desenharPainel();
+}
+function verCEO(id) { vista = id; pintar(false); pintarAba(); espelhar(); }
+$('linhas').addEventListener('click', (e) => { const b = e.target.closest('[data-ceo]'); if (b) verCEO(b.dataset.ceo); });
+$('vistas').addEventListener('click', (e) => { const b = e.target.closest('[data-vista]'); if (!b || !mapa) return; if (b.dataset.vista === 'enquadrar') mapa.enquadrar(locaisDe(ceoDe(j, vista)).map((u) => u.local)); else mapa.ver(b.dataset.vista); });
 $('velocidade').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) { velocidade = +b.dataset.v; pintar(false); } });
-$('abas').addEventListener('click', (e) => { const b = e.target.closest('[data-aba]'); if (b) { aba = b.dataset.aba; if (aba === 'micro') mesMicro = null; $('baixo').classList.remove('recolhido'); $('recolher').textContent = '▾'; $('conteudo').scrollTop = 0; pintar(false); pintarAba(); } });
-$('recolher').addEventListener('click', () => { const r = $('baixo').classList.toggle('recolhido'); $('recolher').textContent = r ? '▴' : '▾'; if (!r) pintarAba(); });
+$('abas').addEventListener('click', (e) => { const b = e.target.closest('[data-aba]'); if (b) { aba = b.dataset.aba; if (aba === 'micro') mesMicro = null; $('baixo').classList.remove('recolhido'); document.body.classList.remove('recolhido'); $('recolher').textContent = '▾'; $('conteudo').scrollTop = 0; pintar(false); pintarAba(); } });
+$('recolher').addEventListener('click', () => { const r = $('baixo').classList.toggle('recolhido'); document.body.classList.toggle('recolhido', r); $('recolher').textContent = r ? '▴' : '▾'; if (!r) pintarAba(); });
+// Leitura do gráfico: passar o dedo ou o mouse mostra os três valores daquele mês.
+function lerGrafico(e) {
+  if (e.target.id !== 'grafico' || !escalaGrafico) return;
+  const r = e.target.getBoundingClientRect();
+  foco = Math.min(j.t, escalaGrafico.mesEm(e.clientX - r.left));
+  desenharPainel();
+}
+$('conteudo').addEventListener('pointerdown', lerGrafico);
+$('conteudo').addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' || e.buttons) lerGrafico(e); });
+$('conteudo').addEventListener('pointerleave', () => { if (foco !== null && aba === 'painel') { foco = null; desenharPainel(); } });
 $('conteudo').addEventListener('click', (e) => {
+  const met = e.target.closest('[data-metrica]'), jan = e.target.closest('[data-janela]');
+  if (met) { metrica = met.dataset.metrica; foco = null; pintarAba(); return; }
+  if (jan) { janela = +jan.dataset.janela; foco = null; pintarAba(); return; }
+  if (e.target.closest('[data-ir-foco]')) { const sala = ceoDe(j, vista).sala; if (!sala.length) return; aba = 'micro'; mesMicro = Math.min(sala[sala.length - 1].t, Math.max(0, (foco ?? j.t) - 1)); foco = null; $('conteudo').scrollTop = 0; pintar(false); pintarAba(); return; }
   const ir = e.target.closest('[data-ir]'), nav = e.target.closest('[data-nav]');
   const sala = ceoDe(j, vista).sala;
   if (nav) { const i = sala.findIndex((s) => s.t === mesMicro); mesMicro = nav.dataset.nav === 'fim' ? sala[sala.length - 1].t : sala[Math.min(sala.length - 1, Math.max(0, i + +nav.dataset.nav))].t; pintarAba(); }
   else if (ir) { aba = 'micro'; mesMicro = +ir.dataset.ir; $('conteudo').scrollTop = 0; pintar(false); pintarAba(); }
 });
 $('conteudo').addEventListener('input', (e) => { if (e.target.id === 'regua') { mesMicro = ceoDe(j, vista).sala[+e.target.value].t; pintarAba(); } });
-if (window.innerHeight < 480 || window.innerWidth < 700) $('recolher').click();
+if (window.innerHeight < 480) $('recolher').click();
 
 function toast(texto, cor) {
   const el = document.createElement('div');
@@ -309,7 +301,7 @@ function novidades() {
   ultimoLog = ultimo;
   for (const l of novos.filter((x) => x.tipo !== 'fala' || velocidade <= 0.5).slice(-3)) {
     toast(`${dataDe(l.t)}: ${l.texto}`, l.de ? CEOS[l.de].cor : '#d9a13a');
-    if (l.tipo === 'era' && l.de) { faixa(CEOS[l.de].nome, l.texto.replace(/^\S+ /, '')); fx.fogos(8); }
+    if (l.tipo === 'era' && l.de) faixa(CEOS[l.de].nome, l.texto.replace(/^\S+ /, ''));
     if (l.tipo === 'lei' && l.texto.startsWith('Eleição')) faixa('Eleições', l.texto.replace(/^Eleição /, ''));
   }
 }
@@ -344,60 +336,45 @@ async function mes() {
   pensando = false;
   $('pensando').classList.remove('visivel');
   if (j.t % 12 === 0 || velocidade < 2) salvar();
-  if (velocidade < 12 || j.t % 6 === 0) espelhar();
+  espelhar();
   novidades();
   pintar(velocidade < 12 || j.t % 3 === 0);
   if (terminou(j) && !fim) {
-    fim = true; salvar(); espelhar();
+    fim = true; salvar();
     const v = vencedor(j);
-    faixa(v.motivo === 'unico' ? 'O único que não quebrou' : v.ceo ? 'Maior patrimônio em dezembro de 2125' : 'Fim', v.ceo ? `${v.ceo.nome} vence com ${reais(v.ceo.patrimonio)}` : 'Todos quebraram');
-    fx.fogos(14);
+    faixa(v.ceo ? 'Maior patrimônio em dezembro de 2125' : 'Fim', v.ceo ? `${v.ceo.nome} vence com ${reais(v.ceo.patrimonio)}` : 'Todos quebraram');
   }
 }
 
-// ---------- laço ----------
-const relogio = new THREE.Clock();
-let somaDt = 0, quadros = 0;
-function quadro() {
-  const dt = Math.min(relogio.getDelta(), 0.1);
-  tempo += dt;
-  somaDt += dt; quadros++;
-  if (quadros >= 50) {
-    const medio = somaDt / quadros;
-    const nova = medio > 1 / 30 ? Math.max(0.6, escala - 0.1) : medio < 1 / 52 ? Math.min(1, escala + 0.06) : escala;
-    if (nova !== escala) { escala = nova; renderer.setPixelRatio(pixelBase * escala); }
-    somaDt = quadros = 0;
-  }
+// ---------- relógio ----------
+let acumulado = 0, antes = performance.now();
+function tique() {
+  const agora = performance.now(), dt = Math.min(0.25, (agora - antes) / 1000);
+  antes = agora;
   if (velocidade > 0 && !pensando && !terminou(j)) {
     acumulado += dt * velocidade;
     if (acumulado >= 1) { acumulado = Math.min(acumulado - 1, 1); mes(); }
   }
-  controles.update();
-  const t = controles.target;
-  if (Math.hypot(t.x, t.z) > 95) { const k = 95 / Math.hypot(t.x, t.z); t.x *= k; t.z *= k; }
-  const chao = Math.max(altura(camera.position.x, camera.position.z), NIVEL_AGUA) + 1.2;
-  if (camera.position.y < chao) camera.position.y = chao;
-  const noite = mundo3d.estado.noite;
-  mundo3d.atualizar(dt, tempo, j.t, controles.target);
-  cidade3d.atualizar(dt, tempo, noite);
-  moradores.atualizar(dt, tempo, noite);
-  fx.atualizar(dt, tempo, noite);
-  renderer.render(scene, camera);
-  requestAnimationFrame(quadro);
+  requestAnimationFrame(tique);
 }
 
 window.jogoCEO = {
   estado: () => j,
-  avancar(meses) { for (let i = 0; i < meses && !terminou(j); i++) { for (const c of j.ceos) if (naVez(j, c)) despachar(j, c, ceoPorRegras(j, c, CEOS[c.id].perfil), 'regras'); avancarMes(j); } espelhar(true); pintar(); pintarAba(); },
-  hora(h) { mundo3d.estado.hora = h; },
+  avancar(meses) { for (let i = 0; i < meses && !terminou(j); i++) { for (const c of j.ceos) if (naVez(j, c)) despachar(j, c, ceoPorRegras(j, c, CEOS[c.id].perfil), 'regras'); avancarMes(j); } espelhar(); pintar(); pintarAba(); },
   pensando: () => pensando,
 };
 
-fetch('/api/arena/status').then((r) => r.json()).catch(() => servidor).then((s) => { servidor = s; pintar(); });
 fim = terminou(j);
-espelhar(true);
 pintar();
 pintarAba();
+fetch('/api/arena/status').then((r) => r.json()).catch(() => servidor).then(async (s) => {
+  servidor = s;
+  mapa = await criarMapa($('mapa'), s.googleMaps, verCEO);
+  $('fonte').textContent = `mapa: ${mapa.tipo}`;
+  espelhar();
+  pintar();
+});
+window.addEventListener('resize', () => { if (mapa) mapa.redimensionar(); if (aba === 'painel') desenharPainel(); pintarRanking(); });
 window.addEventListener('pagehide', salvar);
 document.addEventListener('visibilitychange', () => { if (document.hidden) salvar(); });
-quadro();
+tique();

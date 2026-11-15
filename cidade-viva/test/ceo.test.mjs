@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { LOCAIS, PONTO_INICIAL } from '../src/empresas/campinas.js';
 import { criarJogo, avancarMes, despachar, dossie, ceoPorRegras, naVez, terminou, vencedor, classificacao, patrimonio, composicao, aliquotaSimples, registrarTokens, temTokens, bensPessoais, dataDe, CEOS, NEGOCIOS, EVENTOS, GOVERNO, TOKENS_SECULO, CAIXA_INICIAL, MESES } from '../src/empresas/jogo.js';
 
 const jogar = (semente, perfil, meses = MESES) => {
@@ -18,7 +19,9 @@ test('os três começam iguais: uma padaria em Campinas, R$ 20 mil no caixa da e
   assert.equal(dataDe(j.t), 'jan/2026');
   assert.equal(MESES, 1200);
   for (const c of j.ceos) { assert.equal(c.caixa, CAIXA_INICIAL); assert.equal(c.ops.padaria.unidades, 1); assert.equal(c.ops.padaria.equipe, 8); }
-  assert.equal(new Set(j.ceos.map((c) => JSON.stringify({ ...c, id: 0, nome: '', marcaNome: '' }))).size, 1);
+  // Iguais em tudo, menos no endereço: três bairros de classe média com os mesmos números.
+  assert.equal(new Set(j.ceos.map((c) => JSON.stringify({ ...c, id: 0, nome: '', marcaNome: '', ops: { padaria: { ...c.ops.padaria, locais: 0 } } }))).size, 1);
+  assert.equal(new Set(j.ceos.map((c) => Object.keys(c.ops.padaria.locais)[0])).size, 3);
 });
 
 test('Simples Nacional: alíquotas efetivas do Anexo I', () => {
@@ -168,4 +171,24 @@ test('tokens: verba igual e dossiê mensal com o que é preciso para decidir', (
   assert.equal(TOKENS_SECULO, 10_000_000);
   registrarTokens(c, TOKENS_SECULO - 500);
   assert.ok(!temTokens(c));
+});
+
+test('lugares: os três pontos iniciais valem o mesmo; abrir em bairro rico rende mais e custa mais; o jogo vai até 2125 mesmo com fracassos', () => {
+  const ini = Object.values(PONTO_INICIAL).map((l) => `${LOCAIS[l].renda}/${LOCAIS[l].aluguel}/${LOCAIS[l].gente}`);
+  assert.equal(new Set(ini).size, 1);
+  const j = criarJogo(3), [a, b, c] = j.ceos;
+  for (const x of [a, b]) { x.caixa = 800_000; x.gestao = 0.5; }
+  despachar(j, a, { movimentos: [{ acao: 'abrir', negocio: 'padaria', quantidade: 1, onde: 'cambui' }] }, 'teste');
+  despachar(j, b, { movimentos: [{ acao: 'abrir', negocio: 'padaria', quantidade: 1, onde: 'ouro_verde' }] }, 'teste');
+  for (let m = 0; m < 30; m++) avancarMes(j);
+  assert.equal(a.ops.padaria.locais.cambui, 1); assert.equal(b.ops.padaria.locais.ouro_verde, 1);
+  const ra = a.sala.at(-1).resultado, rb = b.sala.at(-1).resultado;
+  assert.ok(ra.receita > rb.receita * 1.1 && ra.alugueis > rb.alugueis * 1.2, `${ra.receita} x ${rb.receita}; ${ra.alugueis} x ${rb.alugueis}`);
+  assert.ok(a.hist.at(-1).cx !== undefined && a.hist.at(-1).rec > 0 && a.hist.length === 31);
+  // C quebra de vez; o jogo continua para os outros.
+  c.pessoal.divida = 9e9;
+  avancarMes(j);
+  assert.ok(c.quebrou);
+  assert.ok(!terminou(j));
+  assert.equal(vencedor(j), null);
 });

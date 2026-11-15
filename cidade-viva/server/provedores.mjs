@@ -3,6 +3,7 @@
 // Modelos e preços vêm de variáveis de ambiente, porque mudam com frequência.
 import Anthropic from '@anthropic-ai/sdk';
 import { NEGOCIOS, FRANQUIA, EVENTOS, ACOES, GOVERNO, VALENCIAS } from '../src/empresas/jogo.js';
+import { LOCAIS } from '../src/empresas/campinas.js';
 
 const env = process.env;
 const preco = (v, padrao) => (v ? v.split(',').map(Number) : padrao);
@@ -139,7 +140,7 @@ const ESQUEMA_CEO = obj({
   diario: txt, estrategia: txt,
   respostas: { type: 'array', items: obj({ id: int, opcao: txt, justificativa: txt }) },
   operacoes: { type: 'array', items: obj({ negocio: txt, preco_indice: n, salario_indice: n, funcionarios_por_unidade: n, contratar: int, demitir: int, investir_em_qualidade: n, vendo_por: n, justificativa: txt }) },
-  movimentos: { type: 'array', items: obj({ acao: { type: 'string', enum: ['abrir', 'fechar', 'vender', 'lancar_franquia'] }, negocio: txt, quantidade: int, onde: { type: 'string', enum: ['campinas', 'fora'] }, justificativa: txt }) },
+  movimentos: { type: 'array', items: obj({ acao: { type: 'string', enum: ['abrir', 'fechar', 'vender', 'lancar_franquia'] }, negocio: txt, quantidade: int, onde: txt, justificativa: txt }) },
   agenda: { type: 'array', items: obj({ dia: int, area: { type: 'string', enum: Object.keys(VALENCIAS) }, acao: txt, investimento: n }) },
   gestao: obj({ seguro: bool, reposicao_de_pessoal: { type: 'string', enum: ['manual', 'automatica'] }, justificativa: txt }),
   financas: obj({ pro_labore: n, distribuir_lucros: n, aporte_do_dono: n, tomar_emprestimo: n, amortizar_divida: n, justificativa: txt }),
@@ -167,6 +168,12 @@ ${Object.entries(VALENCIAS).map(([k, v]) => `- ${k} (${v.nome}): ${v.efeito}.`).
 
 COMO UM NEGÓCIO VENDE
 Vendas dependem da qualidade de cada negócio, das valências acima, do preço (1 é o preço comum do mercado), de equipe completa e experiente e do salário (abaixo do mercado o atendimento piora, pode dar greve e mais gente pede para sair). Dezembro vende mais, janeiro e fevereiro menos. Campinas satura: muitas unidades do mesmo negócio dividem a clientela; fora de Campinas não satura tão cedo, mas exige mais gestão.
+
+LUGARES
+Cada unidade fica em um lugar do mapa real. O lugar muda a venda (renda do bairro), o aluguel e quantas unidades do mesmo negócio cabem antes de dividir a clientela (somando as suas e as dos rivais). Em "onde" use o id de um lugar; "campinas" ou "fora" deixam o jogo escolher o melhor lugar livre. Lugares marcados com * ficam fora de Campinas.
+id (renda, aluguel, cabem): ${Object.entries(LOCAIS).map(([id, l]) => `${id}${l.fora ? '*' : ''} (${l.renda}, ${l.aluguel}, ${l.gente})`).join('; ')}.
+
+O jogo sempre vai até dezembro de 2125. Não há prêmio por crescer primeiro nem por sobrar sozinho: vale só o seu patrimônio pessoal no fim. Fracassar, estagnar ou ficar com uma padaria só são desfechos possíveis.
 
 A AGENDA: O DIA A DIA
 Em cada despacho você entrega a agenda do mês: de 4 a 12 ações datadas (dia de 1 a 30), cada uma em uma área, com o que fez e quanto investiu (pode ser zero). É o seu registro diário, e é por ela que o dinheiro chega às valências. Exemplos de ações do dia a dia:
@@ -215,7 +222,7 @@ Responda apenas com um objeto JSON, sem texto fora dele. Quem assiste lê o seu 
   "estrategia": "só quando mudar de plano; senão, texto vazio",
   "respostas": [ { "id": número da pendência, "opcao": uma das opções dela, "justificativa": "..." } ],
   "operacoes": [ { "negocio": um que você tem, "preco_indice": número, "salario_indice": número (1 é o salário de mercado), "funcionarios_por_unidade": equipe ideal, "contratar": pessoas, "demitir": pessoas, "investir_em_qualidade": reais, "vendo_por": valor pelo qual aceita vender esse negócio inteiro a um rival, ou 0, "justificativa": "..." } ],
-  "movimentos": [ { "acao": "abrir" | "fechar" | "vender" | "lancar_franquia", "negocio": do catálogo, "quantidade": número, "onde": "campinas" | "fora", "justificativa": "..." } ],
+  "movimentos": [ { "acao": "abrir" | "fechar" | "vender" | "lancar_franquia", "negocio": do catálogo, "quantidade": número, "onde": id de um lugar | "campinas" | "fora", "justificativa": "..." } ],
   "agenda": [ { "dia": 1 a 30, "area": uma das valências, "acao": "o que você fez nesse dia, em uma frase", "investimento": reais } ],
   "gestao": { "seguro": true ou false, "reposicao_de_pessoal": "manual" | "automatica", "justificativa": "..." },
   "financas": { "pro_labore": reais por mês, "distribuir_lucros": reais, "aporte_do_dono": reais, "tomar_emprestimo": reais, "amortizar_divida": reais, "justificativa": "..." },

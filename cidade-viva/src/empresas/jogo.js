@@ -3,6 +3,7 @@
 // a mês até dezembro de 2125. Vence quem tiver o maior patrimônio pessoal
 // (bens próprios mais o valor da empresa). Lógica pura, determinística, em JSON.
 // Dinheiro em reais, a preços de 2026 (sem inflação).
+import { LOCAIS, PONTO_INICIAL } from './campinas.js';
 import { criarMunicipio, avancarAno, aplicarDecisao, prefeitoPorRegras, cenarioDoAno, retrato, ANO_INICIAL, ANO_FINAL } from '../brasil/municipio.js';
 
 export const TOKENS_SECULO = 10_000_000;   // verba igual para os três: dá para 1.200 despachos mensais enxutos
@@ -146,7 +147,7 @@ function quantos(j, chave, n, p) {
   return base + (sorte(j, chave) < esperado - base ? 1 : 0);
 }
 
-const novaOperacao = (tipo, unidades = 0) => ({ tipo, unidades, fora: 0, preco: 1, qualidade: 0.5, salario: 1, func: NEGOCIOS[tipo].func, equipe: unidades * NEGOCIOS[tipo].func, experiencia: 0.6, receita: 0, lucro: 0, lucros12: [], vendoPor: 0, efeitos: [], aluguel: 1, contrato: 0 });
+const novaOperacao = (tipo, unidades = 0, local = 'centro') => ({ tipo, unidades, fora: 0, locais: unidades ? { [local]: unidades } : {}, preco: 1, qualidade: 0.5, salario: 1, func: NEGOCIOS[tipo].func, equipe: unidades * NEGOCIOS[tipo].func, experiencia: 0.6, receita: 0, lucro: 0, lucros12: [], vendoPor: 0, efeitos: [], aluguel: 1, contrato: 0 });
 
 function novoCEO(id) {
   const c = {
@@ -155,7 +156,7 @@ function novoCEO(id) {
     pessoal: { caixa: 3_000, rendaFixa: 0, bolsa: 0, imoveis: 0, divida: 0 }, proLabore: 3_500,
     franqueados: 0, franquia: false, contratos: [],
     ...PADRAO, seguro: false, reposicao: 'manual',
-    ops: { padaria: novaOperacao('padaria', 1) },
+    ops: { padaria: novaOperacao('padaria', 1, PONTO_INICIAL[id] || 'taquaral') },
     receita: 65_000, lucro: 3_500, receitas12: [], regime: 'Simples Nacional', prejuizoFiscal: 0, patrimonio: 0, funcionarios: 8,
     recuperacao: 0, afastado: 0, cartel: false, ilicitos: 0, flagrantes: 0, quebrou: null, fim: '', falencias: 0,
     tokens: 0, mediaTokens: 0, dolares: 0, chamadas: 0, invalidas: 0, proximoDespacho: 0,
@@ -175,19 +176,25 @@ export function criarJogo(semente = 1, ids = Object.keys(CEOS)) {
   };
   j.base = { renda: j.cidade.renda, pop: j.cidade.pop };
   j.cen = cenarioDoAno(semente, ANO_INICIAL);
-  for (const c of j.ceos) { c.patrimonio = patrimonio(j, c); c.hist.push({ t: 0, p: Math.round(c.patrimonio) }); }
+  for (const c of j.ceos) { c.patrimonio = patrimonio(j, c); c.hist.push(ponto(j, c)); }
   return j;
+}
+
+// Um ponto da série histórica de cada empresário, para os gráficos.
+function ponto(j, c) {
+  const R = Math.round;
+  return { t: j.t, p: R(c.patrimonio), cx: R(c.caixa), dv: R(c.divida), rec: R(c.receita), luc: R(c.lucro), bol: R(c.quebrou ? 0 : bensPessoais(c)), emp: R(c.quebrou ? 0 : Math.max(0, valorDaEmpresa(j, c))), un: totalUnidades(c), fun: R(c.funcionarios), pl: R(c.proLabore) };
 }
 
 export const ceo = (j, id) => j.ceos.find((c) => c.id === id);
 export const ativos = (j) => j.ceos.filter((c) => !c.quebrou);
-export const terminou = (j) => j.t >= MESES || (ativos(j).length <= 1 && j.ceos.length > 1) || ativos(j).length === 0;
+// O jogo vai sempre até dezembro de 2125: fracassar faz parte, e quem sobrou continua jogando.
+export const terminou = (j) => j.t >= MESES || ativos(j).length === 0;
 export const naVez = (j, c) => !c.quebrou && !c.afastado && j.t >= c.proximoDespacho;
 export const temTokens = (c) => c.tokens + (c.mediaTokens || 4500) <= TOKENS_SECULO;
 export const classificacao = (j) => [...j.ceos].sort((a, b) => (a.quebrou ? 1 : 0) - (b.quebrou ? 1 : 0) || b.patrimonio - a.patrimonio);
 export function vencedor(j) {
   const v = ativos(j);
-  if (v.length === 1 && j.ceos.length > 1) return { ceo: v[0], motivo: 'unico' };
   if (!v.length) return { ceo: null, motivo: 'ninguem' };
   if (j.t >= MESES) return { ceo: classificacao(j)[0], motivo: 'patrimonio' };
   return null;
@@ -238,6 +245,24 @@ export function composicao(j, c) {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => Math.abs(v) >= 1).map(([k, v]) => [k, Math.round(v)]));
 }
 
+// Quantas unidades de um tipo de negócio há em cada lugar, somando os três.
+function ocupacao(j, tipo) {
+  const o = {};
+  for (const c of ativos(j)) for (const [l, n] of Object.entries(c.ops[tipo]?.locais || {})) o[l] = (o[l] || 0) + n;
+  return o;
+}
+// Quanto um lugar comporta de um tipo de negócio antes de as unidades dividirem a clientela.
+const cabe = (tipo, local) => Math.max(1, LOCAIS[local].gente * (NEGOCIOS[tipo].S / 150) * (LOCAIS[local].fora ? 1 : 1.2));
+// Fator de vendas de uma unidade em um lugar: renda do público e concorrência entre as três redes.
+const fatorLocal = (tipo, local, ocup) => (LOCAIS[local].renda * (LOCAIS[local].fora ? 0.9 : 1)) / (1 + Math.max(0, (ocup[local] || 0) - 1) / cabe(tipo, local));
+// Onde abrir quando o empresário não escolhe: o lugar livre com melhor relação entre público e aluguel.
+function melhorLocal(j, tipo, fora, ocup = ocupacao(j, tipo)) {
+  let melhor = null, nota = -1;
+  for (const [id, l] of Object.entries(LOCAIS)) { if (!!l.fora !== fora) continue; const n = fatorLocal(tipo, id, { ...ocup, [id]: (ocup[id] || 0) + 1 }) / Math.pow(l.aluguel, 0.35); if (n > nota) { nota = n; melhor = id; } }
+  return melhor;
+}
+export const locaisDe = (c) => { const o = []; for (const op of Object.values(c.ops)) for (const [l, n] of Object.entries(op.locais || {})) if (n > 0) o.push({ local: l, negocio: op.tipo, n }); return o; };
+
 const capacidadeDeGestao = (c) => (2 + 400 * Math.pow(c.gestao, 3)) * (1 + 0.5 * c.tecnologia);
 const cargaDeGestao = (c) => Object.values(c.ops).reduce((s, op) => s + (op.unidades + op.fora * 1.3) * NEGOCIOS[op.tipo].complexidade, 0) + c.franqueados * 0.25;
 const limiteDeCredito = (c) => Math.max(0, receita12(c) * 0.35 * (0.85 + 0.6 * c.financas) - c.divida);
@@ -263,7 +288,7 @@ export function dossie(j, c) {
       seguro: c.seguro, reposicao_de_pessoal: c.reposicao,
       valencias: Object.fromEntries(Object.entries(VALENCIAS).map(([k, v]) => [k, r2(c[v.campo])])), reputacao: r2(c.reputacao), carga_de_gestao: r2(cargaDeGestao(c)), capacidade_de_gestao: r2(capacidadeDeGestao(c)),
       negocios: Object.values(c.ops).filter((o) => o.unidades + o.fora > 0).map((o) => ({
-        negocio: o.tipo, unidades_em_campinas: o.unidades, unidades_fora: o.fora, preco_indice: r2(o.preco), qualidade: r2(o.qualidade), salario_indice: r2(o.salario),
+        negocio: o.tipo, unidades_em_campinas: o.unidades, unidades_fora: o.fora, onde: Object.entries(o.locais).map(([l, n]) => `${l}:${n}`).join(' '), preco_indice: r2(o.preco), qualidade: r2(o.qualidade), salario_indice: r2(o.salario),
         equipe: R(o.equipe), equipe_ideal: R((o.unidades + o.fora) * o.func), experiencia_da_equipe: r2(o.experiencia), receita_do_mes: R(o.receita), lucro_do_mes: R(o.lucro),
         efeitos_em_curso: o.efeitos.map((e) => `${e.motivo} (${e.meses} meses)`),
       })),
@@ -280,7 +305,7 @@ export function dossie(j, c) {
     },
     rivais: ativos(j).filter((r) => r !== c).map((r) => ({
       ceo: r.nome, patrimonio: R(r.patrimonio), receita_12_meses: R(receita12(r)), regime: r.regime, ultima_fala: r.fala,
-      negocios: Object.values(r.ops).filter((o) => o.unidades + o.fora > 0).map((o) => ({ negocio: o.tipo, unidades: o.unidades + o.fora, preco_indice: r2(o.preco), qualidade: r2(o.qualidade), salario_indice: r2(o.salario), vende_por: o.vendoPor || null })),
+      negocios: Object.values(r.ops).filter((o) => o.unidades + o.fora > 0).map((o) => ({ negocio: o.tipo, unidades: o.unidades + o.fora, onde: Object.entries(o.locais).slice(0, 12).map(([l, n]) => `${l}:${n}`).join(' '), preco_indice: r2(o.preco), qualidade: r2(o.qualidade), salario_indice: r2(o.salario), vende_por: o.vendoPor || null })),
       franqueados: r.franqueados, valencias: Object.fromEntries(Object.entries(VALENCIAS).map(([k, v]) => [k, r2(r[v.campo])])),
     })),
     sua_estrategia: c.estrategia || '(ainda não escrita)', sua_memoria: c.memoria || '(vazia)',
@@ -303,7 +328,7 @@ export function despachar(j, c, dec, modo, tokens = 0) {
     const J = (o) => texto(o && o.justificativa, 600);
     const V = (o, k) => Math.max(0, num(o && o[k]));
     const movimentos = (Array.isArray(dec.movimentos) ? dec.movimentos : []).filter((m) => m && ['abrir', 'fechar', 'vender', 'lancar_franquia'].includes(m.acao) && (m.acao === 'lancar_franquia' || NEGOCIOS[m.negocio])).slice(0, 6)
-      .map((m) => ({ acao: m.acao, negocio: m.negocio || 'padaria', quantidade: lim(Math.round(num(m.quantidade, 1)), 1, 500), onde: m.onde === 'fora' ? 'fora' : 'campinas', justificativa: texto(m.justificativa, 500) }));
+      .map((m) => ({ acao: m.acao, negocio: m.negocio || 'padaria', quantidade: lim(Math.round(num(m.quantidade, 1)), 1, 500), onde: LOCAIS[m.onde] ? m.onde : m.onde === 'fora' ? 'fora' : 'campinas', justificativa: texto(m.justificativa, 500) }));
     const brutas = Array.isArray(dec.operacoes) ? Object.fromEntries(dec.operacoes.filter((o) => o && o.negocio).map((o) => [o.negocio, o])) : dec.operacoes && typeof dec.operacoes === 'object' ? dec.operacoes : {};
     const operacoes = {};
     for (const [t, o] of Object.entries(brutas)) {
@@ -482,17 +507,26 @@ function executarPauta(j, c) {
       const op = c.ops[m.negocio];
       c.caixa -= q * custo;
       op.experiencia = lim((op.experiencia * op.equipe + 0.3 * q * op.func) / Math.max(1, op.equipe + q * op.func), 0, 1);
-      op[m.onde === 'fora' ? 'fora' : 'unidades'] += q; op.equipe += Math.round(q * op.func); if (novo) op.contrato = j.t;
+      // Cada unidade vai para um lugar: o escolhido, ou o melhor disponível.
+      // A ocupação é a do começo do mês, igual para os três: quem é processado antes não leva o melhor ponto.
+      const ocup = { ...j.ocupNoMes[m.negocio] }, onde = [];
+      for (const [l, n] of Object.entries(op.locais)) ocup[l] = Math.max(ocup[l] || 0, n);
+      for (let i = 0; i < q; i++) { const l = LOCAIS[m.onde] ? m.onde : melhorLocal(j, m.negocio, m.onde === 'fora', ocup); ocup[l] = (ocup[l] || 0) + 1; op.locais[l] = (op.locais[l] || 0) + 1; op[LOCAIS[l].fora ? 'fora' : 'unidades']++; if (!onde.includes(l)) onde.push(l); }
+      op.equipe += Math.round(q * op.func); if (novo) op.contrato = j.t;
+      c.pulsos = [...(c.pulsos || []).slice(-20), ...onde.slice(0, 4).map((l) => ({ t: j.t, local: l, tipo: 'abriu' }))];
       // Unidade nova leva um ano para formar clientela.
       op.efeitos.push({ fator: 1 - 0.4 * (q / (op.unidades + op.fora)), meses: 12, motivo: 'unidades novas formando clientela' });
-      nota(j, c, q === m.quantidade, `Abre ${q} ${def.nome.toLowerCase()}${m.onde === 'fora' ? ' fora de Campinas' : ''} (${reais(q * custo)})${q < m.quantidade ? `; queria ${m.quantidade}, o caixa não deu` : ''}.`, true);
+      nota(j, c, q === m.quantidade, `Abre ${q} ${def.nome.toLowerCase()} em ${onde.slice(0, 3).map((l) => LOCAIS[l].nome).join(', ')}${onde.length > 3 ? ` e mais ${onde.length - 3} lugares` : ''} (${reais(q * custo)})${q < m.quantidade ? `; queria ${m.quantidade}, o caixa não deu` : ''}.`, true);
       if (novo) { registrar(j, `${c.nome} entra em um novo negócio: ${def.nome.toLowerCase()}.`, 'bom', c.id); c.marcos.push({ t: j.t, texto: `Entra em ${def.nome.toLowerCase()}` }); }
     } else {
       const op = c.ops[m.negocio];
       if (!op || op.unidades + op.fora < 1) continue;
       const total = op.unidades + op.fora, q = Math.min(m.quantidade, total), porUnid = op.equipe / total;
       const valorUnit = m.acao === 'vender' ? (valorDaOperacao(c, op) / total) * 0.8 : def.capex * 0.2 - porUnid * sal * op.salario * 12 * REGRAS.rescisao;
-      const dasFora = Math.min(op.fora, q); op.fora -= dasFora; op.unidades -= q - dasFora; op.equipe = Math.max(0, op.equipe - Math.round(porUnid * q));
+      // Sai primeiro do lugar pedido; senão, dos lugares que rendem menos.
+      const ocup = ocupacao(j, m.negocio);
+      for (let i = 0; i < q; i++) { const l = op.locais[m.onde] > 0 ? m.onde : Object.keys(op.locais).filter((x) => op.locais[x] > 0).sort((x, y) => fatorLocal(m.negocio, x, ocup) / LOCAIS[x].aluguel - fatorLocal(m.negocio, y, ocup) / LOCAIS[y].aluguel)[0]; op.locais[l]--; if (!op.locais[l]) delete op.locais[l]; op[LOCAIS[l].fora ? 'fora' : 'unidades']--; }
+      op.equipe = Math.max(0, op.equipe - Math.round(porUnid * q));
       c.caixa += valorUnit * q;
       nota(j, c, true, `${m.acao === 'vender' ? 'Vende' : 'Fecha'} ${q} ${def.nome.toLowerCase()} (${valorUnit >= 0 ? 'entra' : 'custa'} ${reais(Math.abs(valorUnit * q))}).`, true);
     }
@@ -577,7 +611,8 @@ function acoesExternas(j) {
           c.ops[a.negocio] ||= novaOperacao(a.negocio);
           const meu = c.ops[a.negocio], nMeu = meu.unidades + meu.fora, nDele = op.unidades + op.fora;
           meu.qualidade = (meu.qualidade * nMeu + op.qualidade * nDele) / Math.max(1, nMeu + nDele);
-          meu.unidades += op.unidades; meu.fora += op.fora; meu.equipe += op.equipe; op.unidades = 0; op.fora = 0; op.equipe = 0; op.vendoPor = 0;
+          for (const [l, n] of Object.entries(op.locais)) meu.locais[l] = (meu.locais[l] || 0) + n;
+          meu.unidades += op.unidades; meu.fora += op.fora; meu.equipe += op.equipe; op.unidades = 0; op.fora = 0; op.equipe = 0; op.vendoPor = 0; op.locais = {};
           nota(j, c, true, `Compra ${NEGOCIOS[a.negocio].nome.toLowerCase()} de ${alvo.nome} por ${reais(a.recursos)}.`, true);
           registroDoMes(j, alvo).notas.push({ ok: true, texto: `Vende ${NEGOCIOS[a.negocio].nome.toLowerCase()} a ${c.nome} por ${reais(a.recursos)}.`, macro: true });
           registrar(j, `${c.nome} compra ${NEGOCIOS[a.negocio].nome.toLowerCase()} de ${alvo.nome} por ${reais(a.recursos)}.`, 'guerra', c.id);
@@ -630,8 +665,10 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
     // o estrago de um rival sobre as suas vendas tem teto (cerca de 17%).
     const peso = Math.min(0.2, unRivais / (def.S * 0.8));
     const rel = apelo(c, op, ef.cartel) / ((1 - peso) * referencia + peso * Math.min(mediaRivais, referencia * 2));
-    const noMunicipio = ativos(j).reduce((s, r) => s + (r.ops[op.tipo]?.unidades || 0), 0), foraTotal = ativos(j).reduce((s, r) => s + (r.ops[op.tipo]?.fora || 0), 0);
-    const satLocal = 1 / (1 + Math.max(0, noMunicipio - 3) / (def.S * povo)), satFora = 1 / (1 + foraTotal / (def.S * 60));
+    // Cada unidade vende conforme o lugar onde está: renda do público e quantas das três redes dividem a clientela ali.
+    const ocup = ocupacao(j, op.tipo);
+    const pontos = Object.entries(op.locais).reduce((s, [l, n]) => s + n * fatorLocal(op.tipo, l, ocup), 0);
+    const aluguelLocal = Object.entries(op.locais).reduce((s, [l, n]) => s + n * LOCAIS[l].aluguel, 0);
     const digital = def.digital ? 0.6 + 0.9 * lim(j.t / 360, 0, 1) : 1;
     const lotacao = Math.pow(lim(op.equipe / Math.max(1, u * def.func), 0.3, 1.6), 0.5);          // equipe incompleta atende pior
     const moral = lim(0.55 + 0.45 * op.salario, 0.6, 1.25) * (0.85 + 0.3 * c.treinamento) * (0.82 + 0.3 * op.experiencia);
@@ -640,11 +677,11 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
     const choques = op.efeitos.reduce((s, e) => s * e.fator, 1) * cidadeMes.vendas * ef.vendas * (greve ? 0.6 : 1);
     const base = (def.receita / 12) * renda * Math.pow(rel, 0.85) * SAZONAL[mes] * digital * atendimento * folga * choques * (0.94 + 0.2 * c.vendas);
     const limite = u * (def.receita / 12) * renda * 1.4 * atendimento * SAZONAL[mes] * (0.895 + 0.3 * c.operacoes);
-    const volume = Math.min(limite, base * (op.unidades * satLocal + op.fora * satFora * 0.85));
+    const volume = Math.min(limite, base * pontos);
     const rec = volume * op.preco * ef.cartel;
     const ins = volume * def.insumo * Math.pow(j.trigo, 1 - 0.5 * c.compras) * (1.03 - 0.1 * c.compras) * (1 - sinergia) * (1 - 0.1 * c.tecnologia) / folga ** 0.3;
     const fol = op.equipe * sal * op.salario;
-    const alu = u * (def.aluguel / 12) * Math.pow(cid.renda / j.base.renda, 0.7) * op.aluguel;
+    const alu = aluguelLocal * (def.aluguel / 12) * Math.pow(cid.renda / j.base.renda, 0.7) * op.aluguel;
     const fix = u * (def.receita / 12) * 0.05 * ef.fixo * M.fixos;
     op.receita = rec; porOp[op.tipo] = { rec, direto: ins + fol + alu + fix, fol };
     receita += rec; insumos += ins; folha += fol; alugueis += alu; fixos += fix; funcionarios += op.equipe;
@@ -736,7 +773,7 @@ function fecharMes(j, c, ef, foto0, cidadeMes) {
     const anual = Object.values(c.ops).reduce((s, op) => s + lucro12(op), 0);
     if (c.caixa < 0 || anual < 0) {
       // Falência da empresa: os negócios acabam, as dívidas dela também. O dono segue com o que tem no bolso.
-      for (const op of Object.values(c.ops)) { op.unidades = 0; op.fora = 0; op.equipe = 0; op.lucros12 = []; op.efeitos = []; }
+      for (const op of Object.values(c.ops)) { op.unidades = 0; op.fora = 0; op.equipe = 0; op.lucros12 = []; op.efeitos = []; op.locais = {}; }
       c.caixa = 0; c.divida = 0; c.franqueados = 0; c.franquia = false; c.lucrosRetidos = 0; c.contratos = []; c.falencias++; c.reputacao = 0.3; c.marca = 0.2;
       nota(j, c, false, 'Falência da empresa decretada. Os negócios fecham. O dono fica com o que tem no próprio nome e pode recomeçar.', true);
       registrar(j, `A empresa de ${c.nome} vai à falência.`, 'guerra', c.id);
@@ -767,11 +804,13 @@ function sortearEventos(j, c) {
     evento(j, c, `Evento climático sério em Campinas: estragos de ${reais(dano)}${c.seguro ? `, o seguro cobre 80% (você paga ${reais(paga)})` : ', sem seguro'}; próximo mês com 30% menos vendas.`);
   }
   // 2. Assaltos: 5% por unidade por mês; segurança e policiamento reduzem.
+  const lugares = locaisDe(c), lugar = (k) => (lugares.length ? lugares[Math.floor(sorte(j, `lugar:${k}`) * lugares.length)].local : null);
+  const pulso = (k, tipo) => { const l = lugar(k); if (l) c.pulsos = [...(c.pulsos || []).slice(-20), { t: j.t + 1, local: l, tipo }]; return l ? LOCAIS[l].nome : 'uma unidade'; };
   const nAssaltos = quantos(j, 'assalto', u, EVENTOS.assalto.chance * (1.3 - c.seguranca * 1.1) * M.assalto * lim(cid.ind.homicidios / 22, 0.5, 2));
   if (nAssaltos > 0) {
     const perda = nAssaltos * (c.receita / Math.max(1, u)) * 0.07, paga = c.seguro ? perda * 0.2 : perda;
     c.caixa -= paga; for (const o of ops) o.experiencia = lim(o.experiencia - 0.01 * nAssaltos / Math.max(1, u), 0, 1);
-    evento(j, c, `${nAssaltos > 1 ? `${nAssaltos} assaltos` : 'Assalto'} em unidade${nAssaltos > 1 ? 's' : ''}: levaram ${reais(perda)}${c.seguro ? ` (seguro cobre 80%)` : ''} e a equipe ficou abalada.`);
+    evento(j, c, `${nAssaltos > 1 ? `${nAssaltos} assaltos` : 'Assalto'} (${pulso('assalto', 'assalto')}): levaram ${reais(perda)}${c.seguro ? ` (seguro cobre 80%)` : ''} e a equipe ficou abalada.`);
   }
   // 3. Pedidos de demissão: 15% ao mês para uma equipe de 8, por operação.
   for (const o of ops) {
@@ -792,9 +831,9 @@ function sortearEventos(j, c) {
   // Concorrente novo e obra na rua, por unidade.
   if (principal) {
     const nConc = quantos(j, 'conc', u, EVENTOS.concorrente.chance);
-    if (nConc > 0) { principal.efeitos.push({ fator: 1 - 0.06 * Math.min(1, nConc / Math.max(1, principal.unidades + principal.fora)), meses: 18, motivo: 'concorrente novo no bairro' }); evento(j, c, `${nConc > 1 ? `${nConc} concorrentes novos abriram` : 'Um concorrente novo abriu'} perto de unidade${nConc > 1 ? 's' : ''} sua${nConc > 1 ? 's' : ''}.`); }
+    if (nConc > 0) { principal.efeitos.push({ fator: 1 - 0.06 * Math.min(1, nConc / Math.max(1, principal.unidades + principal.fora)), meses: 18, motivo: 'concorrente novo no bairro' }); evento(j, c, `${nConc > 1 ? `${nConc} concorrentes novos abriram` : 'Um concorrente novo abriu'} perto da sua unidade (${pulso('conc', 'concorrente')}).`); }
     const nObra = quantos(j, 'obra', u, EVENTOS.obra.chance);
-    if (nObra > 0) { principal.efeitos.push({ fator: 1 - 0.15 * Math.min(1, nObra / Math.max(1, principal.unidades + principal.fora)), meses: 3, motivo: 'obra na rua' }); evento(j, c, 'A prefeitura abriu obra na rua de uma unidade: três meses de movimento menor.'); }
+    if (nObra > 0) { principal.efeitos.push({ fator: 1 - 0.15 * Math.min(1, nObra / Math.max(1, principal.unidades + principal.fora)), meses: 3, motivo: 'obra na rua' }); evento(j, c, `A prefeitura abriu obra na rua da unidade (${pulso('obra', 'obra')}): três meses de movimento menor.`); }
   }
   // Redes sociais: para o bem ou para o mal.
   if (sorte(j, 'redes') < EVENTOS.redes.chance && principal) {
@@ -823,7 +862,9 @@ export function avancarMes(j) {
   j.bolsaMes = lim(0.0053 + j.cen.crescimento * 0.15 + z * 0.052, -0.3, 0.3);
   j.trigo = lim(j.trigo * (1 + (sorte(j, 'trigo') - 0.5) * 0.05 + (sorte(j, 'trigo2') < 0.03 ? (sorte(j, 'trigo3') - 0.4) * 0.3 : 0)) + (1 - j.trigo) * 0.03, 0.7, 1.6);
   const empregosAntes = ativos(j).reduce((s, c) => s + c.funcionarios, 0);
+  j.ocupNoMes = Object.fromEntries(Object.keys(NEGOCIOS).map((t) => [t, ocupacao(j, t)]));
   for (const c of ativos(j)) executarPauta(j, c);
+  delete j.ocupNoMes;
   const efeitos = acoesExternas(j);
   const neutro = { vendas: 1, tributo: 1, encargos: 1, fixo: 1, cartel: 1 };
   const foto0 = Object.fromEntries(ativos(j).map((c) => [c.id, Object.fromEntries(Object.values(c.ops).map((op) => [op.tipo, apelo(c, op, (efeitos[c.id] || neutro).cartel)]))]));
@@ -854,7 +895,7 @@ export function avancarMes(j) {
   }
   for (const c of ativos(j)) sortearEventos(j, c);
   j.t++;
-  for (const c of j.ceos) if (!c.quebrou) c.hist.push({ t: j.t, p: Math.round(c.patrimonio) });
+  for (const c of j.ceos) c.hist.push(ponto(j, c));
 }
 export const avancarJogo = avancarMes;
 export const retratoDaCidade = (j) => retrato(j.cidade);
@@ -887,7 +928,7 @@ export function ceoPorRegras(j, c, perfil = 'padeiro') {
   const folga = capacidadeDeGestao(c) - cargaDeGestao(c);
   const rende = (t) => unidadesDe(c, t) === 0 || lucro12(c.ops[t]) > 0;
   const quer = (t) => !cumpre(c, NEGOCIOS[t]) && folga > NEGOCIOS[t].complexidade && rende(t);
-  const abrir = (t) => d.movimentos.push({ acao: 'abrir', negocio: t, quantidade: Math.max(1, Math.min(Math.floor(folga / NEGOCIOS[t].complexidade), Math.floor(sobra / NEGOCIOS[t].capex), 1 + Math.ceil(unidadesDe(c, t) * 0.1))), onde: (c.ops[t]?.unidades || 0) > NEGOCIOS[t].S * 0.4 ? 'fora' : 'campinas' });
+  const abrir = (t) => d.movimentos.push({ acao: 'abrir', negocio: t, quantidade: Math.max(1, Math.min(Math.floor(folga / NEGOCIOS[t].complexidade), Math.floor(sobra / NEGOCIOS[t].capex), 1 + Math.ceil(unidadesDe(c, t) * 0.1))), onde: (c.ops[t]?.unidades || 0) > 18 + 6 * NEGOCIOS[t].S / 150 ? 'fora' : 'campinas' });
   for (const op of Object.values(c.ops)) if (op.unidades + op.fora > 1 && op.lucros12.length === 12 && lucro12(op) < 0 && mesDe(j) === 0) d.movimentos.push({ acao: 'fechar', negocio: op.tipo, quantidade: Math.ceil((op.unidades + op.fora) * 0.15) });
   if (!temNegocio(c)) { if (c.pessoal.caixa > NEGOCIOS.padaria.capex * 1.2) { d.financas.aporte_do_dono = c.pessoal.caixa * 0.9; d.movimentos.push({ acao: 'abrir', negocio: 'padaria', quantidade: 1 }); } return d; }
   if (perfil === 'padeiro') {

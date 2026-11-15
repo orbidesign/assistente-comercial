@@ -92,6 +92,8 @@ async function rotaArena(req, res) {
   const ceo = req.url === '/api/arena/decidir-ceo';
   if (req.url === '/api/arena/status') {
     return responder(res, 200, {
+      // Chave do Google Maps para o navegador (restrinja-a ao seu domínio no console do Google).
+      googleMaps: process.env.GOOGLE_MAPS_API_KEY || '',
       tokens: TOKENS_ARENA, jogo: livro.jogo, ensaio: process.env.ARENA_ENSAIO === '1',
       provedores: Object.fromEntries(Object.entries(PROVEDORES).map(([id, p]) => [id, { ativo: ativo(id), modelo: p.modelo, precos: p.precos, gasto: livro.gasto[id] || 0 }])),
     });

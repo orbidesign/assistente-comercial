@@ -13,22 +13,38 @@
       --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --m: 8px;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1533; color: var(--tinta); overscroll-behavior: none;
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #e9dfc4; color: var(--tinta); overscroll-behavior: none;
       font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-size: 14px; -webkit-user-select: none; user-select: none; }
-    canvas#cena { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-    #vinheta { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(20, 12, 30, .34) 100%); }
-    .painel { background: linear-gradient(180deg, var(--papel), var(--papel2)); border: 2px solid var(--borda); border-radius: 12px; box-shadow: 0 3px 0 #8a6a3a, 0 8px 22px rgba(0, 0, 0, .35); }
+    .painel { background: linear-gradient(180deg, var(--papel), var(--papel2)); border: 2px solid var(--borda); border-radius: 12px; box-shadow: 0 3px 0 #8a6a3a, 0 8px 22px rgba(0, 0, 0, .28); }
     button { font: inherit; color: var(--tinta); cursor: pointer; background: #fff7e2; border: 1.5px solid var(--borda); border-radius: 9px; padding: 6px 10px; touch-action: manipulation; }
     button:active { transform: scale(.96); }
     button.ativo { background: var(--ouro); border-color: #8a6a3a; color: #fff; }
     a { color: var(--tinta2); }
 
-    #topo { position: fixed; top: calc(var(--m) + var(--st)); left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); display: flex; flex-direction: column; gap: 6px; }
+    /* o mapa é o palco */
+    #mapa { position: fixed; inset: 0; z-index: 0; background: #e9dfc4; }
+    .ladrilho-jogo { filter: sepia(.32) saturate(1.3) brightness(1.02) contrast(.97); }
+    .leaflet-container { font: inherit; background: #e9dfc4; }
+    .leaflet-popup-content-wrapper { background: var(--papel); color: var(--tinta); border: 2px solid var(--borda); border-radius: 10px; box-shadow: 0 6px 16px rgba(0, 0, 0, .3); }
+    .leaflet-popup-content { margin: 8px 11px; line-height: 1.4; } .leaflet-popup-tip { background: var(--papel); }
+    .selo-caixa { background: none; border: 0; }
+    .selo { position: relative; width: 40px; height: 40px; border-radius: 50%; background: var(--cor); border: 3px solid #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .45); display: grid; place-items: center; font-size: 19px; transition: transform .2s; }
+    .selo.vista { border-color: var(--ouro); transform: scale(1.18); box-shadow: 0 0 0 3px rgba(217, 161, 58, .45), 0 3px 10px rgba(0, 0, 0, .5); }
+    .selo.fora { filter: grayscale(1); opacity: .6; }
+    .selo b { position: absolute; right: -7px; top: -7px; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; background: #fff; color: var(--tinta); font-size: 12px; line-height: 18px; text-align: center; border: 1.5px solid var(--cor); }
+    .selo i { position: absolute; left: -9px; bottom: -8px; font-style: normal; font-size: 17px; animation: pulsa 1s ease-in-out infinite; }
+    @keyframes pulsa { 50% { transform: scale(1.35); } }
+    #vistas { position: fixed; z-index: 2; display: flex; gap: 5px; left: calc(var(--m) + var(--sl)); }
+    #vistas button { padding: 4px 9px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+    #fonte { position: fixed; z-index: 2; font-size: 11px; color: var(--tinta2); background: rgba(246, 236, 210, .85); padding: 1px 7px; border-radius: 8px; }
+
+    #topo { position: fixed; z-index: 3; top: calc(var(--m) + var(--st)); left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+    #topo > * { pointer-events: auto; }
     #cab { padding: 6px 10px; display: flex; align-items: center; gap: 8px; }
     #cab .tit { flex: 1; min-width: 0; }
     #cab h1 { margin: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #quando { font-size: 12px; color: var(--tinta2); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #ano { font-size: 19px; font-weight: bold; letter-spacing: .3px; white-space: nowrap; }
+    #ano { font-size: 19px; font-weight: bold; letter-spacing: .3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
     #velocidade { display: flex; gap: 4px; }
     #velocidade button { min-width: 36px; height: 36px; padding: 0 5px; font-size: 13px; }
 
@@ -36,34 +52,33 @@
     #ranking { padding: 6px 8px; position: relative; }
     #ranking h2 { margin: 0 0 4px; font-size: 12px; font-weight: normal; color: var(--tinta2); letter-spacing: 1px; text-transform: uppercase; }
     .linhas { position: relative; }
-    .lin { position: absolute; left: 0; right: 0; height: 46px; display: grid; grid-template-columns: 26px minmax(74px, auto) 1fr auto; align-items: center; gap: 6px;
+    .lin { position: absolute; left: 0; right: 0; height: 50px; display: grid; grid-template-columns: 24px minmax(70px, 1fr) minmax(50px, 1.1fr) auto; align-items: center; gap: 6px;
       padding: 0 8px 0 4px; border-radius: 9px; border: 1.5px solid transparent; background: rgba(255, 255, 255, .45); cursor: pointer; transition: transform .7s cubic-bezier(.2, .9, .2, 1), background .3s; text-align: left; }
-    .lin.vista { border-color: var(--tinta); background: rgba(255, 255, 255, .85); }
+    .lin.vista { border-color: var(--tinta); background: rgba(255, 255, 255, .88); }
     .lin.fora { opacity: .5; }
-    .lin .pos { font-size: 18px; text-align: center; }
-    .lin .quem { line-height: 1.1; white-space: nowrap; }
-    .lin .quem b { font-size: 15px; } .lin .quem small { display: block; font-size: 11px; color: var(--tinta2); overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
-    .lin .barra { height: 12px; border-radius: 12px; background: #d8c9a2; overflow: hidden; min-width: 30px; }
-    .lin .barra i { display: block; height: 100%; border-radius: 12px; transition: width .7s; }
+    .lin .pos { font-size: 17px; text-align: center; }
+    .lin .quem { line-height: 1.1; white-space: nowrap; min-width: 0; }
+    .lin .quem b { font-size: 15px; } .lin .quem small { display: block; font-size: 11px; color: var(--tinta2); overflow: hidden; text-overflow: ellipsis; }
+    .lin canvas { width: 100%; height: 30px; display: block; }
     .lin .val { text-align: right; line-height: 1.1; white-space: nowrap; }
     .lin .val b { font-size: 16px; font-variant-numeric: tabular-nums; } .lin .val small { display: block; font-size: 11px; }
     .sobe { color: var(--bom); } .desce { color: var(--ruim); }
     .lin.pensa .quem small { color: #8a5fc9; font-weight: bold; }
 
-    #toasts { position: fixed; left: calc(var(--m) + var(--sl)); top: calc(var(--st) + 250px); width: min(330px, calc(100vw - 20px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
-    .toast { padding: 6px 10px; border-radius: 9px; background: rgba(59, 42, 26, .9); color: #fff3d6; line-height: 1.25; font-size: 13px; border-left: 5px solid #cbb78a; animation: entra .35s ease-out, some .6s ease-in 6s forwards; }
-    @keyframes entra { from { opacity: 0; transform: translateX(-24px); } }
+    #toasts { position: fixed; z-index: 4; left: 50%; transform: translateX(-50%); top: calc(var(--st) + 258px); width: min(330px, calc(100vw - 20px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+    .toast { padding: 6px 10px; border-radius: 9px; background: rgba(59, 42, 26, .92); color: #fff3d6; line-height: 1.25; font-size: 13px; border-left: 5px solid #cbb78a; animation: entra .35s ease-out, some .6s ease-in 5s forwards; }
+    @keyframes entra { from { opacity: 0; transform: translateY(-14px); } }
     @keyframes some { to { opacity: 0; transform: translateY(-8px); } }
 
-    #baixo { position: fixed; left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); bottom: calc(var(--m) + var(--sb)); display: flex; flex-direction: column; }
+    #baixo { position: fixed; z-index: 3; left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); bottom: calc(var(--m) + var(--sb)); display: flex; flex-direction: column; }
     #abas { display: flex; gap: 4px; padding: 6px 8px; border-bottom: 1.5px solid var(--borda); align-items: center; overflow-x: auto; scrollbar-width: none; }
-    #abas::-webkit-scrollbar { display: none; }
+    #abas::-webkit-scrollbar, .fichas::-webkit-scrollbar { display: none; }
     #abas button { padding: 4px 9px; flex: 0 0 auto; }
     #abas .esp { flex: 1; }
-    #conteudo { overflow-y: auto; padding: 8px 10px 10px; height: 34vh; -webkit-overflow-scrolling: touch; line-height: 1.38; -webkit-user-select: text; user-select: text; }
+    #conteudo { overflow-y: auto; padding: 8px 10px 10px; height: 40vh; -webkit-overflow-scrolling: touch; line-height: 1.38; -webkit-user-select: text; user-select: text; }
     #baixo.recolhido #conteudo { display: none; } #baixo.recolhido #abas { border: 0; }
     #conteudo h3 { margin: 0 0 4px; font-size: 15px; }
-    #conteudo h4 { margin: 10px 0 2px; font-size: 13px; color: var(--tinta2); font-weight: normal; letter-spacing: .6px; text-transform: uppercase; }
+    #conteudo h4 { margin: 10px 0 3px; font-size: 13px; color: var(--tinta2); font-weight: normal; letter-spacing: .6px; text-transform: uppercase; }
     .rot { color: var(--tinta2); font-size: 12px; }
     .porque { margin: 2px 0 0; padding: 4px 8px; border-left: 3px solid var(--ouro); background: rgba(255, 255, 255, .45); border-radius: 0 6px 6px 0; font-style: italic; }
     .nota { margin: 2px 0; padding-left: 20px; position: relative; }
@@ -72,51 +87,86 @@
     .anoBloco { margin: 0 0 10px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, .4); border-left: 4px solid var(--borda); }
     .anoBloco b.a { font-size: 15px; }
     .nav { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-    .nav button { padding: 3px 12px; } .nav b { font-size: 17px; min-width: 52px; text-align: center; }
+    .nav button { padding: 3px 12px; } .nav b { font-size: 17px; min-width: 76px; text-align: center; }
     .nav input { flex: 1; min-width: 0; }
     table { border-collapse: collapse; width: 100%; font-size: 13px; }
     td, th { padding: 3px 6px; border-bottom: 1px solid #d8c9a2; text-align: right; white-space: nowrap; }
     td:first-child, th:first-child { text-align: left; color: var(--tinta2); white-space: normal; }
     th { font-weight: bold; }
-    #grafico { width: 100%; height: 170px; display: block; }
-    .legenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
-    .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
-    .dia { margin: 0 0 9px; padding: 7px 9px; border-radius: 9px; background: rgba(255, 255, 255, .45); border-left: 4px solid var(--borda); }
+    .dia { margin: 0 0 9px; padding: 7px 9px; border-radius: 9px; background: rgba(255, 255, 255, .45); border-left: 4px solid var(--borda); cursor: pointer; }
     .dia .cab { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
     .dia .cab b { font-size: 15px; }
-    .dia .fala { margin: 3px 0; font-size: 14.5px; }
-    .dia .nums { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12.5px; margin: 3px 0; padding: 3px 7px; border-radius: 6px; background: rgba(59, 42, 26, .07); }
-    .dia .nums span { white-space: nowrap; } .dia .nums i { font-style: normal; color: var(--tinta2); }
+    .fala { margin: 3px 0; font-size: 14.5px; }
+    .nums { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12.5px; margin: 3px 0; padding: 3px 7px; border-radius: 6px; background: rgba(59, 42, 26, .07); }
+    .nums span { white-space: nowrap; } .nums i { font-style: normal; color: var(--tinta2); }
     .ev { margin: 2px 0; padding-left: 20px; position: relative; font-size: 13px; color: #5a4632; }
     .ev::before { content: '⚡'; position: absolute; left: 1px; font-size: 12px; }
     .tag { display: inline-block; padding: 0 7px; border-radius: 20px; background: var(--tinta); color: var(--papel); font-size: 11px; }
 
-    #pensando { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 9px 20px; background: rgba(59, 42, 26, .9); color: #ffe9b0; border-radius: 30px; border: 2px solid var(--ouro); opacity: 0; transition: opacity .3s; pointer-events: none; }
+    /* painel de gráficos */
+    .fichas { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+    .fichas button { flex: 0 0 auto; padding: 3px 9px; font-size: 13px; border-radius: 20px; }
+    #grafico { width: 100%; height: 220px; display: block; touch-action: none; cursor: crosshair; background: rgba(255, 255, 255, .35); border-radius: 8px; }
+    #leitura { display: flex; flex-wrap: wrap; gap: 3px 14px; align-items: baseline; margin: 5px 0 2px; min-height: 22px; font-variant-numeric: tabular-nums; }
+    #leitura .quando { font-weight: bold; font-size: 15px; }
+    #leitura span i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+    .cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }
+    .cartao { padding: 6px 8px 4px; border-radius: 9px; background: rgba(255, 255, 255, .5); border: 1.5px solid transparent; cursor: pointer; text-align: left; display: block; width: 100%; }
+    .cartao.ativo { border-color: var(--tinta); background: rgba(255, 255, 255, .9); color: var(--tinta); }
+    .cartao small { display: block; color: var(--tinta2); font-size: 11.5px; }
+    .cartao b { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .cartao em { font-style: normal; font-size: 11.5px; margin-left: 4px; }
+    .cartao canvas { width: 100%; height: 24px; display: block; margin-top: 2px; }
+    .barras { display: grid; grid-template-columns: minmax(96px, auto) 1fr; gap: 3px 8px; align-items: center; font-size: 12.5px; }
+    .barras .tr { display: flex; flex-direction: column; gap: 1px; }
+    .barras .tr i { display: block; height: 5px; border-radius: 5px; min-width: 2px; }
+
+    #pensando { position: fixed; z-index: 5; left: 50%; top: 52%; transform: translate(-50%, -50%); padding: 9px 20px; background: rgba(59, 42, 26, .92); color: #ffe9b0; border-radius: 30px; border: 2px solid var(--ouro); opacity: 0; transition: opacity .3s; pointer-events: none; }
     #pensando.visivel { opacity: 1; }
-    #faixa { position: fixed; left: 0; right: 0; top: 40%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .8s; }
+    #faixa { position: fixed; z-index: 6; left: 0; right: 0; top: 40%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .8s; }
     #faixa.visivel { opacity: 1; }
     #faixa div { display: inline-block; padding: 12px 36px; background: rgba(59, 42, 26, .92); color: #ffe9b0; border-top: 3px solid var(--ouro); border-bottom: 3px solid var(--ouro); }
     #faixa small { display: block; letter-spacing: 3px; font-size: 12px; text-transform: uppercase; opacity: .85; }
     #faixa b { font-size: clamp(20px, 5.5vw, 32px); }
 
+    /* celular: mapa no meio, painel embaixo */
+    #vistas { bottom: calc(40vh + 62px + var(--sb)); } #fonte { right: 60px; bottom: calc(40vh + 60px + var(--sb)); }
+    body.recolhido #vistas { bottom: calc(60px + var(--sb)); } body.recolhido #fonte { bottom: calc(58px + var(--sb)); }
+    .leaflet-bottom { bottom: calc(40vh + 56px) !important; } body.recolhido .leaflet-bottom { bottom: 56px !important; }
+
+    /* celular em pé: ranking compacto para o mapa aparecer */
+    @media (max-width: 700px) {
+      #ranking h2 { display: none; } .lin { height: 36px; } .lin .quem small, .lin .val small { display: none; } .lin canvas { height: 24px; }
+      #conteudo { height: 36vh; }
+      #vistas { bottom: calc(36vh + 62px + var(--sb)); }
+      .leaflet-bottom { bottom: calc(36vh + 56px) !important; }
+      #toasts { top: calc(var(--st) + 196px); } .toast:not(:last-child) { display: none; }
+      #faixa { top: calc(var(--st) + 190px); } #faixa div { padding: 8px 14px; }
+    }
+    @media (max-width: 999px) { #fonte { display: none; } }
     @media (min-width: 1000px) {
       :root { --m: 12px; }
-      #topo { right: auto; width: 470px; }
+      #topo { right: auto; width: 440px; }
       #cab h1 { font-size: 19px; }
-      #baixo { left: auto; width: 520px; top: calc(var(--m) + var(--st)); }
+      #baixo { left: auto; width: 540px; top: calc(var(--m) + var(--st)); }
       #conteudo { height: auto; flex: 1; }
       #baixo.recolhido { top: auto; }
-      #toasts { top: calc(var(--st) + 290px); }
+      #toasts { top: calc(var(--st) + 16px); left: calc((100vw - 560px + 440px) / 2); }
+      #faixa { right: 560px; left: 0; }
+      #vistas, body.recolhido #vistas { bottom: calc(var(--m) + var(--sb)); } #fonte, body.recolhido #fonte { right: 620px; bottom: calc(var(--m) + var(--sb)); }
+      .leaflet-bottom, body.recolhido .leaflet-bottom { bottom: 8px !important; right: 560px !important; }
+      #grafico { height: 250px; }
     }
     @media (max-height: 480px) {
-      #ranking h2 { display: none; } .lin { height: 30px; } .lin .quem small, .lin .val small { display: none; }
-      #conteudo { height: 40vh; } #toasts { display: none; }
+      #ranking h2 { display: none; } .lin { height: 30px; } .lin .quem small, .lin .val small, .lin canvas { display: none; }
+      #conteudo { height: 46vh; } #toasts { display: none; }
     }
   </style>
 </head>
 <body>
-  <canvas id="cena"></canvas>
-  <div id="vinheta"></div>
+  <div id="mapa"></div>
+  <div id="vistas"><button data-vista="campinas">Campinas</button><button data-vista="regiao">Região</button><button data-vista="brasil">Brasil</button><button data-vista="enquadrar">Minhas unidades</button></div>
+  <div id="fonte"></div>
 
   <div id="topo">
     <section id="cab" class="painel">
@@ -139,11 +189,11 @@
 
   <section id="baixo" class="painel">
     <div id="abas">
-      <button data-aba="diario" class="ativo">Diário</button>
+      <button data-aba="painel" class="ativo">Painel</button>
+      <button data-aba="diario">Diário</button>
       <button data-aba="macro">Macro</button>
       <button data-aba="micro">Micro</button>
       <button data-aba="comparar">Comparar</button>
-      <button data-aba="grafico">Gráfico</button>
       <button data-aba="cronica">Crônica</button>
       <button data-aba="regras">Regras</button>
       <span class="esp"></span>

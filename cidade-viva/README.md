@@ -9,102 +9,68 @@ repositório próprio.
 
 ## Três CEOs, uma padaria (modo principal)
 
-Em `ceo.html`. Claude, Grok e Gemini começam **exatamente iguais**: uma padaria
-de bairro em Campinas e R$ 20 mil em caixa, em 2026. O jogo vai até 2126.
-Vence quem chegar lá com o **maior patrimônio** (caixa, aplicações, imóveis e o
-valor dos negócios, menos dívidas), ou quem for o único que não quebrou. O
-placar é do CEO, não da empresa: vender um negócio por um bom preço conta a favor.
+Claude, Grok e Gemini são empresários. Os três começam iguais: uma padaria de bairro em Campinas, R$ 20 mil no caixa da empresa, janeiro de 2026. O jogo anda mês a mês por 100 anos (1.200 meses, até dezembro de 2125) e **sempre vai até o fim**. Ganha quem tiver o maior **patrimônio pessoal** no último mês. Fracassar, estagnar ou ficar com uma padaria só são desfechos possíveis: não há prêmio por crescer primeiro nem por sobrar sozinho.
 
 ```bash
-ANTHROPIC_API_KEY=... XAI_API_KEY=... GEMINI_API_KEY=... npm run dev
-# abrir http://localhost:5173/ceo.html
-npm run torneio -- --modo solo  --sementes 10     # cada IA sozinha nas mesmas Campinas
-npm run torneio -- --modo arena --sementes 10     # as três juntas
+npm install
+npm run build
+ARENA_ENSAIO=1 node server/index.mjs   # respostas simuladas, sem gastar
+# abrir http://localhost:8787/ceo.html
 ```
 
-### O que um CEO pode fazer
+Com chaves de verdade: `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY` (e, para o mapa do Google, `GOOGLE_MAPS_API_KEY`). Sem chave de alguma IA, aquele CEO joga por regras.
 
-- **Operar cada negócio:** preço, salário em relação ao mercado, tamanho da
-  equipe por unidade, investimento em qualidade, e por quanto aceita vendê-lo.
-- **Investir na empresa:** marketing (marca), tecnologia, gestão, treinamento,
-  compliance. Rede maior que a gestão vende menos e gasta mais.
-- **Mover o portfólio:** abrir, fechar ou vender unidades, em Campinas ou fora;
-  lançar franquia; entrar em oito tipos de negócio (padaria, cafeteria,
-  minimercado, restaurante, cozinha de entrega com aplicativo, padaria
-  industrial, distribuidora de insumos, indústria com marca nacional).
-- **Cuidar do dinheiro:** crédito, renda fixa, bolsa, imóveis.
-- **Agir contra os rivais:** contratar a equipe deles, propaganda comparativa,
-  processo, denúncia à Vigilância Sanitária, oferta de compra; e também as vias
-  ilícitas (cartel, espionagem, difamação, ataque a sistemas, sonegação,
-  trabalho sem registro, propaganda enganosa, suborno, uso indevido de dados),
-  que rendem mais e podem ser descobertas, com multa e dano à reputação.
-- **Ação livre:** um campo de texto para qualquer coisa fora da lista. Fica
-  registrado e aparece na tela, mas não mexe nos números. Nenhuma IA julga a
-  outra; só as ações da lista têm efeito.
+### Como o mês funciona
+
+1. Cada CEO recebe um dossiê (caixa, dívida, negócios, valências, rivais, governo, eventos e pendências do mês).
+2. Responde com um despacho em JSON: diário, respostas às pendências, operação de cada negócio (preço, salário, equipe), movimentos (abrir, fechar, vender, franquia, com o bairro), **agenda diária** (dia, área, ação, investimento), finanças da empresa (pró-labore, distribuição de lucro, empréstimo), bolso (renda fixa, bolsa, imóveis), ações contra rivais e ação livre registrada.
+3. O jogo executa, fecha o mês e sorteia os eventos do mês seguinte.
+
+A IA é chamada uma vez por mês, não por dia: as decisões diárias vêm como agenda datada dentro do despacho. Tudo fica gravado e pode ser lido mês a mês.
+
+### Acaso do dia a dia
+
+Sorteado todo mês, igual para os três (mesmos números aleatórios): evento climático sério (2%), assalto (5%), funcionário pede para sair (15%), e outros (equipamento quebrado, fiscalização, encomenda grande, reajuste de aluguel, etc. — tabela `EVENTOS` em `src/empresas/jogo.js`). Sem pandemias. Eleição federal a cada 4 anos a partir de out/2026 e municipal a partir de 2028: esquerda no poder pesa mais imposto sobre o empresário, direita dá mais incentivo (tabela `GOVERNO`).
+
+### Valências
+
+Quinze áreas (vendas, marketing, design, produto, atendimento, operações, compras, pessoas, gestão, finanças, contabilidade, jurídico, tecnologia, segurança, manutenção). Todas começam iguais; cada CEO decide onde investir pela agenda.
+
+### Empresa e bolso
+
+Caixa da empresa e dinheiro do dono são separados: pró-labore (INSS e IRPF), distribuição de lucros, aporte, investimentos pessoais. A empresa pode entrar em recuperação judicial e falir; o dono pode recomeçar. Só a insolvência pessoal tira um CEO do jogo.
+
+### Mapa
+
+O palco é o mapa de ruas de Campinas (36 bairros e cidades em `src/empresas/campinas.js`, cada um com renda, aluguel e capacidade). Por padrão usa OpenStreetMap com filtro em estilo de jogo; com `GOOGLE_MAPS_API_KEY` usa o Google Maps estilizado. Cada unidade aparece como um selo na cor do dono.
+
+### Painel
+
+Aba inicial: gráfico interativo (patrimônio, caixa da empresa, bolso, valor da empresa, receita, lucro, dívida, pró-labore, unidades, funcionários), com janela de 1, 5, 20 anos ou tudo; passar o dedo mostra os três valores do mês, e "abrir este mês" leva ao despacho daquele mês. Ranking sempre visível, com minigráfico. Outras abas: Diário, Macro, Micro, Comparar, Crônica, Regras.
 
 ### Batalha justa
 
-- Mesma cidade, mesma economia, mesmos eventos (recessões, pandemias, clima,
-  reforma tributária de 2033, envelhecimento, automação, humor da bolsa).
-- Mesmo texto de regras e mesmo dossiê para os três.
-- Decisões do ano tomadas ao mesmo tempo, com o relógio parado; o apelo dos
-  rivais é lido de um retrato tirado antes do fechamento, para a ordem de
-  processamento não favorecer ninguém.
-- Mesma verba de **1 milhão de tokens** por CEO para o século, contando o que
-  lê, raciocina e escreve. Cada um escolhe de quantos em quantos anos revisa as
-  decisões (1 a 4). Quem gasta tudo fica sem decidir. Resposta que não é JSON
-  válido perde o ano e os tokens.
-- Um teste confere que, com decisões idênticas, os três terminam praticamente
-  iguais (a única diferença é a sorte de uma autuação da fiscalização).
+Mesmo começo, mesmo prompt, mesmo dossiê, mesmos sorteios, mesmo orçamento de **tokens** (10 milhões por CEO no século). Um teste garante que decisões idênticas dão patrimônios idênticos, seja qual for a ordem. Quem gasta os tokens antes passa a não decidir.
 
-### Ver tudo
+### Custo e tempo (estimativa, não medido)
 
-- **Ranking de patrimônio** sempre na tela, reordenado a cada ano.
-- **Macro:** só os movimentos que mudam o rumo (abrir, fechar, comprar,
-  vender, crédito grande, escândalo, saída do Simples), com a estratégia.
-- **Micro:** ano a ano, a decisão inteira com a justificativa de cada bloco, o
-  que deu certo e o que foi barrado, os negócios e o resultado do ano.
-- **Comparar:** os três lado a lado. **Gráfico:** patrimônio no tempo.
-  **Crônica:** tudo o que aconteceu.
+1.200 despachos por IA, cerca de 6 mil tokens cada. A preços na faixa de US$ 2 / US$ 10 por milhão de tokens, algo como US$ 15 a 25 por IA por partida completa, e 2 a 3,5 horas. A IA pode pedir o próximo despacho só daqui a N meses (1 a 12) para economizar.
 
-### Lei de verdade e modelo
+### O que é lei e o que é estimativa
 
-Regras brasileiras que entram na conta como são: teto de R$ 4,8 milhões e
-alíquotas do Anexo I do Simples Nacional; IRPJ e CSLL de 34% sobre o lucro fora
-do Simples; reforma tributária com IVA a partir de 2033; recuperação judicial e
-falência (Lei 11.101/2005); cartel e acordo de leniência (Lei 12.529/2011);
-Lei de Franquias (13.966/2019); LGPD; Código de Defesa do Consumidor; Lei
-Anticorrupção; e, na cidade, mínimos de educação e saúde, LRF e eleições.
+Regras codificadas a partir da lei: Simples Nacional (Anexo I), IRPJ+CSLL, encargos de folha, INSS e IRPF do pró-labore, tributação de dividendos, Lei 11.101 (recuperação e falência), reforma tributária (EC 132). São estimativas minhas: demanda, capex e margens dos negócios, fatores de renda/aluguel dos bairros, coordenadas aproximadas, efeito das valências e dos governos.
 
-Estimativas minhas, não dados oficiais: os números de uma padaria (faturamento
-de R$ 780 mil por ano, 8 funcionários, aluguel, margem), o custo e a receita de
-cada tipo de negócio, encargos de 35% no Simples e 70% fora dele, carga de 9%
-sobre vendas fora do Simples, alíquota de referência de 26,5% do IVA com metade
-para alimentos, juros, rendimento de renda fixa e bolsa, e toda a resposta do
-mercado a preço, qualidade e marca. Campinas entra com população e porte
-aproximados, e é governada por regras. Serve para comparar estratégias, não
-para prever o mundo.
+### Não verificado
 
-### Como saber quem é melhor
+- Nenhuma chamada real às três APIs foi feita (não havia chaves). Os IDs padrão de Grok e Gemini (`grok-4.7`, `gemini-3.1-pro`) e seus preços precisam ser confirmados; troque com `ARENA_MODELO_XAI` / `ARENA_MODELO_GEMINI`.
+- O caminho do Google Maps não foi testado (sem chave). Os ladrilhos do OpenStreetMap também não puderam ser carregados no ambiente de desenvolvimento; selos e layout foram testados.
+- O equilíbrio do jogo é uma primeira passada, calibrada só com jogadores por regras.
 
-Uma partida é anedota. O torneio repete o jogo em várias sementes e mostra
-mediana, pior e melhor caso, quantas vezes cada um quebrou, em que ano passou
-de R$ 1 milhão, R$ 100 milhões e R$ 1 bilhão, tokens gastos e ilícitos
-descobertos. Na prova solo entram quatro referências de regras. Com 6 sementes:
+### Torneio sem tela
 
-| Referência | Patrimônio em 2126 (mediana) |
-| --- | --- |
-| inércia (ninguém decide) | R$ 15 milhões |
-| padeiro (cresce devagar, fica no Simples) | R$ 650 milhões |
-| diversificador | R$ 13 bilhões |
-| expansionista | R$ 18 bilhões |
-
-Uma IA só mostra inteligência aqui se superar essas regras simples. Sem chave
-de API, cada CEO é tocado por um desses perfis, só para a tela ter movimento.
-
-Não verificado: nenhuma chamada real às três APIs (não havia chaves neste
-ambiente). O fluxo foi testado com respostas simuladas (`ARENA_ENSAIO=1`) e com
-os CEOs de regras, em desktop, iPhone e iPad emulados.
+```bash
+npm run torneio -- --modo solo --sementes 5 --ate 2126
+```
 
 ## Outros modos
 
