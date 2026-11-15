@@ -233,5 +233,7 @@ export function criarFX(scene) {
     }
   }
 
-  return { atualizar, fogos, brilho, poeira, fogo, caravana, sincronizarAnimais, sincronizarLampioes };
+  function limpar() { for (const lista of ovelhas.values()) lista.forEach((o) => scene.remove(o.g)); ovelhas.clear(); }
+
+  return { atualizar, fogos, brilho, poeira, fogo, caravana, sincronizarAnimais, sincronizarLampioes, limpar };
 }

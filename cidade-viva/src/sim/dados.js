@@ -13,6 +13,10 @@ export const ERAS = [
   { nome: 'Cidade Mercantil', pop: 100, conhecimento: 90, requer: 'estado' },
   { nome: 'Cidade Industrial', pop: 240, conhecimento: 450, requer: 'escola' },
   { nome: 'Metrópole', pop: 520, conhecimento: 1600, requer: 'universidade' },
+  // Eras tardias: ainda sem prédios próprios, medem até onde o saber da cidade chega.
+  { nome: 'Era Elétrica', pop: 700, conhecimento: 6000, requer: 'ferrovia' },
+  { nome: 'Era Digital', pop: 800, conhecimento: 18000, requer: 'hospital' },
+  { nome: 'Era Solar', pop: 900, conhecimento: 45000 },
 ];
 
 // prod = unidades por trabalhador (família) por mês.

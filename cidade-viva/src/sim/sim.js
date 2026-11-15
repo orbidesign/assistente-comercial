@@ -26,17 +26,20 @@ function registrar(w, texto, tipo = 'info') {
 
 // ---------- criação ----------
 
-export function criarMundo(semente = 1) {
+// opcoes.manual: o Estado não se governa sozinho (na Arena quem decide é a IA).
+// opcoes.lentidao: divide o ganho de conhecimento, esticando as eras por séculos.
+export function criarMundo(semente = 1, opcoes = {}) {
   const w = {
     versao: 1, semente, rng: semente | 0, mes: 0, proxId: 1,
     nome: '', era: 0, conhecimento: 0, terra: 14, seguranca: 1,
     precos: Object.fromEntries(Object.entries(BENS).map(([k, b]) => [k, b.base])),
     familias: [], negocios: [], mods: [], log: [], hist: [],
     lotes: gerarLotes().map((l) => ({ ...l, uso: null })),
-    estado: { existe: false, tesouro: 0, taxa: 0, legitimidade: 0.6, predios: [], mesesFraco: 0 },
-    ia: false, greve: 0, ind: {},
+    estado: { existe: false, tesouro: 0, taxa: 0, legitimidade: 0.6, predios: [], mesesFraco: 0, exercito: 0 },
+    ia: false, greve: 0, ind: {}, manual: !!opcoes.manual, lentidao: opcoes.lentidao || 1,
   };
   w.nome = sorteia(w, NOMES_CIDADE);
+  if (opcoes.nome) w.nome = opcoes.nome;
   for (let i = 0; i < 5; i++) novaFamilia(w, { membros: 3 + Math.floor(rnd(w) * 3), riqueza: 30 + rnd(w) * 35 });
   registrar(w, `Cinco famílias erguem as primeiras cabanas em ${w.nome}.`, 'era');
   calcularIndicadores(w);
@@ -97,6 +100,8 @@ function abrirNegocio(w, dono, tipo) {
   const def = NEGOCIOS[tipo];
   const entrada = def.custo * entradaMinima(w);
   if (!def || def.era > w.era || dono.riqueza < entrada) return null;
+  // Os últimos lotes ficam para os prédios públicos.
+  if (w.lotes.filter((l) => !l.uso).length <= 12) return null;
   const pos = pegarLote(w, def.lote, 'negocio');
   if (!pos) return null;
   if (dono.emprego) {
@@ -335,7 +340,7 @@ export function avancarMes(w) {
   }
   const alvoSeg = temServico(w, 'guarda') ? 0.92 : lim(1 - w.ind.populacao / 160, 0.25, 1);
   w.seguranca = lim(w.seguranca + (alvoSeg - w.seguranca) * 0.05, 0, 1);
-  w.conhecimento += 0.05 + w.ind.populacao * 0.0015 + w.ind.educacao * w.ind.populacao * 0.004;
+  w.conhecimento += (0.05 + w.ind.populacao * 0.0015 + w.ind.educacao * w.ind.populacao * 0.004) / (w.lentidao || 1);
 
   // 9. Estado
   cicloDoEstado(w, arrecadado);
@@ -412,7 +417,10 @@ function cicloDoEstado(w, arrecadado) {
   }
   e.tesouro += arrecadado;
   e.arrecadado = arrecadado;
-  const gasto = e.predios.reduce((s, p) => s + SERVICOS[p.tipo].manut, 0) * (1 + w.ind.populacao / 120);
+  // Soldado custa soldo todo mês; sem dinheiro para pagar, a tropa deserta.
+  const soldo = (e.exercito || 0) * 0.5;
+  if (e.tesouro < 0 && e.exercito > 0) e.exercito = Math.floor(e.exercito * 0.93);
+  const gasto = e.predios.reduce((s, p) => s + SERVICOS[p.tipo].manut, 0) * (1 + w.ind.populacao / 120) + soldo;
   e.tesouro = Math.max(-60, e.tesouro - gasto); e.gasto = gasto;
   for (const f of w.familias) f.riqueza += (gasto * 0.7) / w.familias.length;
   const alvo = lim(0.2 + 0.55 * w.ind.felicidade + 0.04 * e.predios.length - e.taxa * 0.7 - (e.tesouro < 0 ? 0.1 : 0), 0, 1);
@@ -437,7 +445,7 @@ export function necessidadesDoEstado(w) {
 
 function cicloAnual(w) {
   const e = w.estado;
-  if (e.existe) {
+  if (e.existe && !w.manual) {
     if (e.tesouro < 0 && e.taxa < 0.24 && (e.arrecadado || 0) > 0) { e.taxa = lim(e.taxa + 0.02, 0, 0.4); registrar(w, `Cofres vazios: o conselho sobe os impostos para ${Math.round(e.taxa * 100)}%.`, 'estado'); }
     else if (e.tesouro >= 0) {
       const falta = necessidadesDoEstado(w);
@@ -622,4 +630,106 @@ export function resumoParaIA(w, curto = false) {
     ultimos_fatos: w.log.slice(-5).map((l) => l.texto),
     }),
   };
+}
+
+// ---------- Arena: uma mente governa o Estado ----------
+
+export function pontos(w) {
+  const i = w.ind;
+  return Math.round(w.era * 150 + i.populacao * 0.4 + w.conhecimento * 0.1 + i.felicidade * 100 + i.educacao * 100);
+}
+
+// O que o governante enxerga da própria cidade.
+export function resumoGoverno(w) {
+  const i = w.ind, e = w.estado, p2 = (v) => +v.toFixed(2);
+  const prox = ERAS[w.era + 1];
+  return {
+    cidade: w.nome, ano: Math.floor(w.mes / 12) + 1, era: ERAS[w.era].nome, pontos: pontos(w),
+    proxima_era: prox ? { nome: prox.nome, exige_populacao: prox.pop, exige_conhecimento: prox.conhecimento, exige: prox.requer || 'nada' } : null,
+    populacao: i.populacao, familias: i.familias, negocios: i.negocios, conhecimento: Math.round(w.conhecimento),
+    felicidade: p2(i.felicidade), saude: p2(i.saude), educacao: p2(i.educacao), seguranca: p2(w.seguranca),
+    desigualdade: p2(i.gini), emprego: p2(i.emprego), salario: p2(i.salario), confianca_empresarios: p2(i.confianca),
+    precos: Object.fromEntries(Object.entries(w.precos).map(([k, v]) => [k, p2(v)])),
+    imposto: p2(e.taxa), tesouro: Math.round(e.tesouro), arrecadacao_mensal: Math.round(e.arrecadado || 0), gasto_mensal: Math.round(e.gasto || 0),
+    legitimidade: p2(e.legitimidade), exercito: e.exercito || 0, soldo_mensal: (e.exercito || 0) * 0.5,
+    servicos: e.predios.map((p) => p.tipo),
+    pode_construir: Object.entries(SERVICOS).filter(([t, v]) => v.era <= w.era && !temServico(w, t)).map(([t, v]) => ({ tipo: t, custo: v.custo, manutencao: v.manut })),
+    pode_fomentar: Object.entries(NEGOCIOS).filter(([, n]) => n.era <= w.era).map(([t, n]) => ({ tipo: t, custo: n.custo, produz: n.produz })),
+    fatos_recentes: w.log.slice(-5).map((l) => l.texto),
+  };
+}
+
+export const CUSTO_SOLDADO = 6;
+
+// Aplica uma decisão de governo, venha ela de uma IA ou das regras. Tudo é
+// validado e limitado aqui: nenhuma resposta malformada quebra a cidade.
+export function aplicarGoverno(w, d) {
+  const e = w.estado, feito = [];
+  if (!e.existe || !d || typeof d !== 'object') return feito;
+  const num = (v) => (Number.isFinite(+v) ? +v : 0);
+  if (d.imposto !== undefined && d.imposto !== null && Number.isFinite(+d.imposto)) {
+    const nova = lim(+d.imposto > 1 ? +d.imposto / 100 : +d.imposto, 0, 0.45);
+    if (Math.abs(nova - e.taxa) > 0.004) { e.taxa = nova; feito.push(`imposto em ${Math.round(nova * 100)}%`); }
+  }
+  if (typeof d.construir === 'string' && SERVICOS[d.construir] && construir(w, d.construir)) feito.push(`constrói ${SERVICOS[d.construir].nome}`);
+  const dispensa = Math.min(e.exercito, Math.max(0, Math.round(num(d.dispensar))));
+  if (dispensa) { e.exercito -= dispensa; feito.push(`dispensa ${dispensa} soldados`); }
+  const teto = Math.floor(populacao(w) * 0.12);
+  const recruta = Math.max(0, Math.min(Math.round(num(d.recrutar)), teto - e.exercito, Math.floor(Math.max(0, e.tesouro) / CUSTO_SOLDADO)));
+  if (recruta > 0) { e.exercito += recruta; e.tesouro -= recruta * CUSTO_SOLDADO; feito.push(`recruta ${recruta} soldados`); }
+  const pesquisa = Math.min(Math.max(0, num(d.pesquisa)), Math.max(0, e.tesouro));
+  if (pesquisa >= 1) { e.tesouro -= pesquisa; w.conhecimento += (pesquisa * 0.5) / (w.lentidao || 1); feito.push(`investe ${Math.round(pesquisa)} em pesquisa`); }
+  const auxilio = Math.min(Math.max(0, num(d.auxilio)), Math.max(0, e.tesouro));
+  if (auxilio >= 1 && w.familias.length) {
+    const pobres = [...w.familias].sort((a, b) => a.riqueza - b.riqueza).slice(0, Math.ceil(w.familias.length / 2));
+    pobres.forEach((f) => { f.riqueza += auxilio / pobres.length; });
+    e.tesouro -= auxilio; e.legitimidade = lim(e.legitimidade + 0.02, 0, 1);
+    feito.push(`distribui ${Math.round(auxilio)} em auxílio`);
+  }
+  const def = NEGOCIOS[d.fomento];
+  if (def && def.era <= w.era) {
+    const subsidio = def.custo * 0.5;
+    const f = [...w.familias].sort((a, b) => b.riqueza - a.riqueza).find((q) => q.riqueza + subsidio >= def.custo * entradaMinima(w));
+    if (f && e.tesouro >= subsidio) {
+      f.riqueza += subsidio; e.tesouro -= subsidio;
+      if (abrirNegocio(w, f, d.fomento)) feito.push(`fomenta uma ${def.nome.toLowerCase()}`);
+      else { f.riqueza -= subsidio; e.tesouro += subsidio; }
+    }
+  }
+  if (d.fala) registrar(w, `Governo: “${String(d.fala).slice(0, 220)}”`, 'estado');
+  calcularIndicadores(w);
+  return feito;
+}
+
+// Governante de regras: joga quando não há chave de API, e serve de linha de base.
+// O perfil dá um temperamento a cada cidade sem chave, para a disputa ter graça
+// mesmo antes de as IAs entrarem.
+export const PERFIS = {
+  equilibrado: { tropa: 0.04, pesquisa: 0.35, valentia: 1.7, ataque: 0.35 },
+  sabio: { tropa: 0.025, pesquisa: 0.6, valentia: 3, ataque: 0.1 },
+  guerreiro: { tropa: 0.09, pesquisa: 0.15, valentia: 1.3, ataque: 0.6 },
+  mercador: { tropa: 0.035, pesquisa: 0.3, valentia: 2.2, ataque: 0.2, fomenta: true },
+};
+
+export function governoPorRegras(w, rivais = [], perfil = 'equilibrado') {
+  const P = PERFIS[perfil] || PERFIS.equilibrado;
+  const e = w.estado, d = { plano: '', fala: '', construir: 'nada', recrutar: 0, dispensar: 0, pesquisa: 0, auxilio: 0, fomento: 'nenhum', atacar: 'nenhuma' };
+  if (!e.existe) return d;
+  d.imposto = e.tesouro < 0 ? Math.min(0.24, e.taxa + 0.03) : e.tesouro > (e.gasto || 1) * 30 ? Math.max(P.fomenta ? 0.03 : 0.04, e.taxa - 0.01) : e.taxa;
+  const falta = necessidadesDoEstado(w);
+  let livre = Math.max(0, e.tesouro);
+  const obra = falta.find((t) => SERVICOS[t].custo <= livre);
+  if (obra) { d.construir = obra; livre -= SERVICOS[obra].custo; }
+  const alvoTropa = Math.floor(populacao(w) * P.tropa);
+  if (e.exercito < alvoTropa && livre > 60) { d.recrutar = Math.min(alvoTropa - e.exercito, Math.floor((livre * 0.4) / CUSTO_SOLDADO)); livre -= d.recrutar * CUSTO_SOLDADO; }
+  if (P.fomenta && livre > 80) {
+    const melhor = Object.entries(NEGOCIOS).filter(([, n]) => n.era <= w.era && n.custo * 0.5 <= livre)
+      .sort((x, y) => w.precos[y[1].produz] / BENS[y[1].produz].base - w.precos[x[1].produz] / BENS[x[1].produz].base)[0];
+    if (melhor && w.precos[melhor[1].produz] > BENS[melhor[1].produz].base) { d.fomento = melhor[0]; livre -= melhor[1].custo * 0.5; }
+  }
+  if (!falta.length || livre > 200) { d.pesquisa = Math.round(livre * P.pesquisa); livre -= d.pesquisa; }
+  if (livre > (e.gasto || 1) * 24) d.auxilio = Math.round(livre * 0.25);
+  const fraco = rivais.filter((r) => r.exercito * P.valentia < e.exercito).sort((a, b) => b.pontos - a.pontos)[0];
+  if (fraco && e.exercito >= 12 && rnd(w) < P.ataque) d.atacar = fraco.cidade;
+  return d;
 }

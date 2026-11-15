@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#3b2a1a" />
+  <title>Arena das IAs — Cidade Viva</title>
+  <style>
+    :root {
+      --papel: #f6ecd2; --papel2: #eadbb6; --tinta: #3b2a1a; --tinta2: #7a6248; --borda: #b6935a; --ouro: #d9a13a;
+      --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+      --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); --m: 8px;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1533; color: var(--tinta); overscroll-behavior: none;
+      font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-size: 14px; -webkit-user-select: none; user-select: none; }
+    canvas#cena { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+    #vinheta { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(20, 12, 30, .34) 100%); }
+    .painel { background: linear-gradient(180deg, var(--papel), var(--papel2)); border: 2px solid var(--borda); border-radius: 12px;
+      box-shadow: 0 3px 0 #8a6a3a, 0 8px 22px rgba(0, 0, 0, .35); }
+    button { font: inherit; color: var(--tinta); cursor: pointer; background: #fff7e2; border: 1.5px solid var(--borda); border-radius: 9px; padding: 6px 10px; touch-action: manipulation; }
+    button:active { transform: scale(.95); }
+    button.ativo { background: var(--ouro); border-color: #8a6a3a; color: #fff; }
+    a { color: var(--tinta2); }
+
+    #topo { position: fixed; top: calc(var(--m) + var(--st)); left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); display: flex; flex-direction: column; gap: 6px; }
+    #cab { padding: 6px 10px; display: flex; align-items: center; gap: 8px; }
+    #cab .tit { flex: 1; min-width: 0; }
+    #cab h1 { margin: 0; font-size: 16px; white-space: nowrap; }
+    #quando { font-size: 12px; color: var(--tinta2); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #velocidade { display: flex; gap: 4px; }
+    #velocidade button { min-width: 38px; height: 36px; padding: 0 5px; font-size: 13px; }
+
+    #cidades { display: flex; gap: 6px; }
+    .cid { flex: 1; min-width: 0; padding: 0 0 6px; cursor: pointer; overflow: hidden; position: relative; transition: transform .2s, box-shadow .2s; text-align: left; font-size: 12px; }
+    .cid.vista { transform: translateY(2px); box-shadow: 0 0 0 3px var(--ouro), 0 6px 16px rgba(0, 0, 0, .4); }
+    .cid .faixa { height: 7px; }
+    .cid .corpo { padding: 4px 7px 0; }
+    .cid .ia { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .cid .ia small { font-weight: normal; color: var(--tinta2); overflow: hidden; text-overflow: ellipsis; }
+    .cid .nome { color: var(--tinta2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cid .era { display: inline-block; margin: 2px 0; padding: 0 7px; border-radius: 20px; background: var(--tinta); color: var(--papel); font-size: 11px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+    .cid .nums { display: flex; flex-wrap: wrap; gap: 1px 8px; white-space: nowrap; }
+    .cid .nums b { font-size: 13px; }
+    .cid .verba { height: 6px; border-radius: 6px; background: #d8c9a2; overflow: hidden; margin-top: 4px; }
+    .cid .verba i { display: block; height: 100%; background: #4f9a3c; }
+    .cid .st { color: var(--tinta2); font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cid.pensa .st { color: #8a5fc9; font-weight: bold; }
+
+    #toasts { position: fixed; left: calc(var(--m) + var(--sl)); top: calc(var(--st) + 205px); width: min(320px, calc(100vw - 20px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+    .toast { padding: 6px 10px; border-radius: 9px; background: rgba(59, 42, 26, .9); color: #fff3d6; line-height: 1.25; font-size: 13px; border-left: 5px solid #cbb78a;
+      animation: entra .35s ease-out, some .6s ease-in 6s forwards; }
+    @keyframes entra { from { opacity: 0; transform: translateX(-24px); } }
+    @keyframes some { to { opacity: 0; transform: translateY(-8px); } }
+
+    #baixo { position: fixed; left: calc(var(--m) + var(--sl)); right: calc(var(--m) + var(--sr)); bottom: calc(var(--m) + var(--sb)); display: flex; flex-direction: column; max-height: 42vh; }
+    #abas { display: flex; gap: 5px; padding: 6px 8px; border-bottom: 1.5px solid var(--borda); align-items: center; }
+    #abas button { padding: 4px 10px; }
+    #abas .esp { flex: 1; }
+    #conteudo { overflow-y: auto; padding: 8px 10px; height: 150px; -webkit-overflow-scrolling: touch; line-height: 1.35; }
+    #baixo.recolhido #conteudo { display: none; }
+    #baixo.recolhido #abas { border: 0; }
+    #conteudo p { margin: 0 0 7px; padding-left: 8px; border-left: 4px solid #cbb78a; }
+    #conteudo p small { color: var(--tinta2); display: block; font-size: 11px; }
+    #conteudo h3 { margin: 0 0 4px; font-size: 14px; }
+    #conteudo .rot { color: var(--tinta2); font-size: 12px; }
+    #placar { width: 100%; height: 130px; display: block; }
+    .legenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
+    .legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+
+    #pensando { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); padding: 10px 22px; background: rgba(59, 42, 26, .9); color: #ffe9b0;
+      border-radius: 30px; border: 2px solid var(--ouro); opacity: 0; transition: opacity .3s; pointer-events: none; text-align: center; }
+    #pensando.visivel { opacity: 1; }
+    #faixa { position: fixed; left: 0; right: 0; top: 34%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .8s; }
+    #faixa.visivel { opacity: 1; }
+    #faixa div { display: inline-block; padding: 12px 36px; background: rgba(59, 42, 26, .9); color: #ffe9b0; border-top: 3px solid var(--ouro); border-bottom: 3px solid var(--ouro); }
+    #faixa small { display: block; letter-spacing: 3px; font-size: 12px; text-transform: uppercase; opacity: .85; }
+    #faixa b { font-size: clamp(20px, 5.5vw, 32px); }
+
+    @media (min-width: 1000px) {
+      :root { --m: 12px; }
+      #topo { right: auto; width: 560px; }
+      #cab h1 { font-size: 20px; }
+      .cid { font-size: 13px; }
+      #baixo { left: auto; width: 420px; max-height: 60vh; }
+      #conteudo { height: 300px; }
+      #toasts { top: calc(var(--st) + 250px); }
+    }
+    @media (max-height: 480px) {
+      .cid .nome, .cid .st, .cid .verba { display: none; }
+      #conteudo { height: 90px; }
+      #toasts { top: calc(var(--st) + 130px); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="cena"></canvas>
+  <div id="vinheta"></div>
+
+  <div id="topo">
+    <section id="cab" class="painel">
+      <div class="tit"><h1>Arena das IAs</h1><div id="quando"></div></div>
+      <div id="velocidade">
+        <button data-v="0" aria-label="Pausar">⏸</button>
+        <button data-v="4" aria-label="Um ano a cada 3 segundos">▶</button>
+        <button data-v="20" aria-label="Rápido">▶▶</button>
+        <button data-v="80" aria-label="Um século a cada 15 segundos">▶▶▶</button>
+      </div>
+    </section>
+    <div id="cidades"></div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <section id="baixo" class="painel">
+    <div id="abas">
+      <button data-aba="cronica" class="ativo">Crônica</button>
+      <button data-aba="mente">Mente</button>
+      <button data-aba="placar">Placar</button>
+      <button data-aba="regras">Regras</button>
+      <span class="esp"></span>
+      <button id="recolher" aria-label="Recolher">▾</button>
+    </div>
+    <div id="conteudo"></div>
+  </section>
+
+  <div id="pensando">Os governos estão reunidos…</div>
+  <div id="faixa"><div><small id="faixa-topo"></small><b id="faixa-texto"></b></div></div>
+
+  <script type="module" src="/src/arena-main.js"></script>
+</body>
+</html>

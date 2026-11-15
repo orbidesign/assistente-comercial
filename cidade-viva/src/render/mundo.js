@@ -230,7 +230,8 @@ export function criarMundo3D(scene, q = { arvores: 1700, tufos: 6500, sombra: 20
     const x = (rng() - 0.5) * 170, z = (rng() - 0.5) * 170;
     const h = altura(x, z);
     if (h < 0.5 || h > 14 || fbm(x * 0.2, z * 0.2) < 0.42) continue;
-    listaTufos.push({ x, z, h, s: 0.6 + rng() * 0.9 });
+    const s0 = 0.6 + rng() * 0.9;
+    listaTufos.push({ x, z, h, s: s0, s0 });
   }
   const tufos = new THREE.InstancedMesh(geoTufo, matCapim, listaTufos.length);
   tufos.receiveShadow = true;
@@ -422,5 +423,13 @@ export function criarMundo3D(scene, q = { arvores: 1700, tufos: 6500, sombra: 20
     atualizar, pintarCaminhos, limparArea, estado, terreno, sol,
     chover(tempo, segundos) { tempoRuim.chuvaAte = tempo + segundos; },
     secar(nivel) { tempoRuim.secaAlvo = nivel; },
+    // Devolve a mata ao estado original (ao trocar a cidade em exibição).
+    restaurar() {
+      folhosas.forEach((a, i) => { a.viva = true; desenharArvore(a, i); });
+      pinheiros.forEach((a, i) => { a.viva = true; desenharArvore(a, i); });
+      Object.values(camadas).forEach((im) => { im.instanceMatrix.needsUpdate = true; });
+      listaTufos.forEach((g, i) => { g.s = g.s0; poe(tufos, i, g.x, g.h - 0.05, g.z, g.s, g.s, g.s, g.x); });
+      tufos.instanceMatrix.needsUpdate = true;
+    },
   };
 }

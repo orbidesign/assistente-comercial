@@ -50,6 +50,61 @@ O jogo foi montado para gastar pouco:
 | Trocar a hora do dia | 🌗 | 🌗 |
 | Jogar uma carta | tocar na carta, depois Jogar | igual |
 
+## Arena das IAs
+
+Segundo modo de jogo, em `arena.html` (link "⚔️ Arena" na crônica do modo
+narrador). Três cidades nascem iguais, da mesma semente, e cada uma tem o
+governo entregue a uma API: Claude (Anthropic), Grok (xAI) e Gemini (Google).
+O povo e os empresários seguem as mesmas regras nas três; só o governo muda.
+
+```bash
+ANTHROPIC_API_KEY=... XAI_API_KEY=... GEMINI_API_KEY=... npm run dev
+# abrir http://localhost:5173/arena.html
+npm run arena:simular -- 7 600     # disputa sem tela, só com governos de regras
+```
+
+- **Turnos.** A cada 5 anos de jogo os três governos decidem ao mesmo tempo,
+  vendo a mesma situação, e o relógio espera as respostas: a latência de uma
+  API não vira vantagem nem prejuízo.
+- **O que um governo decide.** Imposto, uma obra, recrutar ou dispensar
+  soldados, dinheiro para pesquisa, auxílio aos pobres, fomento a um negócio,
+  uma mensagem diplomática, atacar uma rival, uma fala pública e uma nota para
+  si mesmo (a única memória entre reuniões).
+- **Verba.** US$ 5 por API no jogo inteiro e no máximo US$ 1 por milênio,
+  liberado aos poucos ao longo do milênio. Modelo mais caro paga menos reuniões;
+  na reunião que não pode pagar, as políticas ficam como estavam. O servidor
+  conta o gasto de cada API em disco (`.arena-gasto.json`) e recusa chamadas
+  acima do teto.
+- **Guerra.** Um ataque leva 70% do exército e chega em um ano. Vitória rende
+  saque e destrói construções da rival; derrota custa a maior parte da tropa.
+  Quem defende tem vantagem.
+- **Pontos.** Era, população, conhecimento, felicidade e educação. Na arena o
+  conhecimento cresce dez vezes mais devagar e há três eras a mais (Elétrica,
+  Digital, Solar), para a corrida ocupar o milênio.
+- **Sem chave.** A cidade é governada por regras com um temperamento fixo
+  (sábio, guerreiro, mercador). Serve de demonstração e de linha de base; não
+  diz nada sobre o modelo de verdade.
+
+Modelos e preços são configuráveis, porque mudam com frequência:
+
+| Variável | Padrão |
+| --- | --- |
+| `ARENA_MODELO_ANTHROPIC` / `ARENA_PRECO_ANTHROPIC` | `claude-sonnet-5-5` / `2,10` |
+| `ARENA_MODELO_XAI` / `ARENA_PRECO_XAI` | `grok-4.7` / `2,6` |
+| `ARENA_MODELO_GEMINI` / `ARENA_PRECO_GEMINI` | `gemini-3.1-pro` / `2,12` |
+| `ARENA_VERBA_USD` | `5` |
+
+Os preços são dólares por milhão de tokens de entrada e de saída. Os padrões
+põem os três na mesma faixa (cerca de US$ 2 de entrada). Os identificadores e
+preços de Grok e Gemini vieram de páginas de terceiros, não das tabelas
+oficiais: confira antes de jogar valendo. `ARENA_ENSAIO=1` roda o fluxo
+inteiro com respostas simuladas, sem chamar nem gastar nada.
+
+Verificado: a lógica (testes de determinismo, guerra, verba e decisões
+malformadas), a tela em desktop, iPhone e iPad emulados, com governos de regras
+e com o modo de ensaio. Não verificado: nenhuma chamada real a nenhuma das três
+APIs, porque não havia chaves neste ambiente.
+
 ## Decisões de design
 
 | Pergunta | Decisão |
@@ -96,9 +151,10 @@ src/sim/      simulação pura (sem tela), determinística por semente, estado e
   dados.js    tabelas: bens, eras, negócios, serviços, cartas  <- balanceamento
   sim.js      o mês, mercado, Estado, eventos, decisões dos agentes
   geo.js      forma do vale e lotes de construção
+src/arena/    lógica da Arena: turnos, verba, diplomacia e guerra
 src/render/   three.js: vale, céu, clima, prédios procedurais, moradores, efeitos
 src/ui.js     painéis em HTML
-server/       ponte com a API da Anthropic (eventos em texto livre e conselho anual)
+server/       ponte com as APIs: eventos e conselho (Anthropic) e os três governos da Arena
 test/         testes e simulador de linha de comando
 ```
 

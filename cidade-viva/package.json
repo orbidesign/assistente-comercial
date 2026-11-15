@@ -6,8 +6,9 @@
     "dev": "node server/index.mjs & vite",
     "build": "vite build",
     "server": "node server/index.mjs",
-    "test": "node --test test/sim.test.mjs",
-    "simular": "node test/simular.mjs"
+    "test": "node --test test/sim.test.mjs test/arena.test.mjs",
+    "simular": "node test/simular.mjs",
+    "arena:simular": "node test/arena-simular.mjs"
   },
   "keywords": [],
   "author": "",

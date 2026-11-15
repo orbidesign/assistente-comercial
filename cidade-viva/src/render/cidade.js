@@ -113,7 +113,16 @@ export function criarCidade(scene, mundo3d) {
     if (p) anel.position.set(p.spec.pos.x, altura(p.spec.pos.x, p.spec.pos.z) + 0.25, p.spec.pos.z);
   }
 
-  return { grupo, sincronizar, atualizar, selecionar, posicoes: () => [...predios.values()].map((p) => p.spec.pos) };
+  function limpar() {
+    for (const p of predios.values()) grupo.remove(p.obj);
+    for (const p of saindo) grupo.remove(p.obj);
+    predios.clear(); saindo.length = 0;
+    if (praca) scene.remove(praca);
+    if (ponte) scene.remove(ponte);
+    praca = ponte = null; eraPraca = -1; calcada = false; anel.visible = false;
+  }
+
+  return { grupo, sincronizar, atualizar, selecionar, limpar, posicoes: () => [...predios.values()].map((p) => p.spec.pos) };
 }
 
 // ---------- moradores ----------
@@ -237,7 +246,9 @@ export function criarMoradores(scene) {
     }
   }
 
-  return { grupo, sincronizar, atualizar, emote };
+  function limpar() { for (const m of gente.values()) grupo.remove(m.g); gente.clear(); }
+
+  return { grupo, sincronizar, atualizar, emote, limpar };
 }
 
 // Avatar do narrador, para descer e andar pela cidade.
