@@ -121,6 +121,10 @@
     .barras .tr { display: flex; flex-direction: column; gap: 1px; }
     .barras .tr i { display: block; height: 5px; border-radius: 5px; min-width: 2px; }
 
+    .ia { margin: 0 0 10px; padding: 9px 10px; border-radius: 10px; background: rgba(255, 255, 255, .5); border-left: 5px solid var(--cor, var(--borda)); }
+    .ia h3 { display: flex; align-items: center; gap: 8px; } .ia h3 small { font-weight: normal; font-size: 12px; }
+    .ia input, .ia select { font: inherit; width: 100%; padding: 7px 9px; margin: 4px 0; border: 1.5px solid var(--borda); border-radius: 8px; background: #fffdf5; color: var(--tinta); -webkit-user-select: text; user-select: text; }
+    .ia .res { margin-top: 5px; font-size: 13px; }
     #pensando { position: fixed; z-index: 5; left: 50%; top: 52%; transform: translate(-50%, -50%); padding: 9px 20px; background: rgba(59, 42, 26, .92); color: #ffe9b0; border-radius: 30px; border: 2px solid var(--ouro); opacity: 0; transition: opacity .3s; pointer-events: none; }
     #pensando.visivel { opacity: 1; }
     #faixa { position: fixed; z-index: 6; left: 0; right: 0; top: 40%; text-align: center; pointer-events: none; opacity: 0; transition: opacity .8s; }
@@ -196,6 +200,7 @@
       <button data-aba="comparar">Comparar</button>
       <button data-aba="cronica">Crônica</button>
       <button data-aba="regras">Regras</button>
+      <button data-aba="ias">⚙ IAs</button>
       <span class="esp"></span>
       <button id="recolher" aria-label="Recolher">▾</button>
     </div>

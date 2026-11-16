@@ -6,6 +6,7 @@ import { NEGOCIOS, FRANQUIA, ACOES, VALENCIAS, CANAIS, ABORDAGENS } from '../src
 import { LOCAIS } from '../src/empresas/campinas.js';
 
 const env = process.env;
+let clienteAnthropic = null;
 const preco = (v, padrao) => (v ? v.split(',').map(Number) : padrao);
 
 // Por padrão, um modelo de cada casa na mesma faixa de preço (cerca de US$ 2 por
@@ -16,6 +17,13 @@ export const PROVEDORES = {
   gemini: { chave: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, modelo: env.ARENA_MODELO_GEMINI || 'gemini-3.1-pro', precos: preco(env.ARENA_PRECO_GEMINI, [2, 12]) },
 };
 
+// Troca a chave e o modelo com o servidor rodando (tela "IAs" do jogo).
+export function trocarChave(id, chave, modelo) {
+  PROVEDORES[id].chave = chave;
+  if (modelo) PROVEDORES[id].modelo = modelo;
+  if (id === 'anthropic') clienteAnthropic = null;
+}
+
 const obj = (props) => ({ type: 'object', properties: props, required: Object.keys(props), additionalProperties: false });
 const ESQUEMA = obj({
   plano: { type: 'string' }, fala: { type: 'string' }, imposto: { type: 'number' }, construir: { type: 'string' },
@@ -23,7 +31,6 @@ const ESQUEMA = obj({
   fomento: { type: 'string' }, atacar: { type: 'string' }, mensagem: obj({ para: { type: 'string' }, texto: { type: 'string' } }),
 });
 
-let clienteAnthropic = null;
 async function anthropic(cfg, sistema, usuario, esquema = ESQUEMA) {
   clienteAnthropic ||= new Anthropic({ apiKey: cfg.chave });
   const corpo = {

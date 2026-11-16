@@ -226,6 +226,34 @@ function abaRegras() {
     <button id="exportar">⬇ Exportar o registro completo</button> <button id="novo">🌱 Novo jogo</button> &nbsp; <a href="./">Modo narrador</a> · <a href="arena.html">Arena medieval</a>`;
 }
 
+// ---------- aba IAs: colar a chave, escolher o modelo e testar, sem terminal ----------
+const CASAS = { anthropic: ['Claude (Anthropic)', 'console.anthropic.com → API Keys'], xai: ['Grok (xAI)', 'console.x.ai → API Keys'], gemini: ['Gemini (Google)', 'aistudio.google.com → Chaves de API'] };
+const ias = {};
+function abaIAs() {
+  if (!servidor.telaDeChaves) return `<h3>IAs</h3>As chaves só podem ser configuradas no computador onde o jogo roda, abrindo <b>http://localhost:8787/ceo.html</b> nele. ${servidor.provedores && Object.keys(servidor.provedores).length ? '' : '<br><br>O servidor do jogo não respondeu: abra o jogo pelo arquivo <b>Abrir o jogo</b>.'}`;
+  return `<h3>As três IAs</h3><div class="rot" style="margin-bottom:8px">Cole a chave de cada uma e toque em <b>Salvar e testar</b>. A chave fica só neste computador. O teste faz um despacho de verdade do primeiro mês (custa centavos). Quem ficar sem chave joga por regras fixas.</div>
+    ${Object.entries(CASAS).map(([id, [nome, onde]]) => { const p = servidor.provedores[id] || {}, x = ias[id] || {}; return `<div class="ia" style="--cor:${CEOS[id].cor}">
+      <h3>${nome} <small class="${p.ativo ? 'sobe' : 'desce'}">${p.ativo ? `● pronta · ${esc(p.modelo)}` : '○ sem chave'}</small></h3>
+      <div class="rot">Onde pegar: ${onde}</div>
+      <input type="password" data-chave="${id}" placeholder="${p.ativo ? 'chave já guardada (cole outra para trocar)' : 'cole a chave aqui'}" autocomplete="off">
+      ${x.modelos ? `<select data-modelo="${id}">${x.modelos.map((m) => `<option ${m === x.modelo ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>` : ''}
+      <button data-salvar="${id}" ${x.ocupado ? 'disabled' : ''}>${x.ocupado ? 'Testando…' : x.modelos ? 'Salvar e testar de novo' : 'Salvar e testar'}</button>
+      <div class="res">${x.erro ? `<span class="desce">✗ ${esc(x.erro)}</span>` : x.teste ? (x.teste.ok ? `<span class="sobe">✓ Funcionou</span> em ${x.teste.segundos}s, ${mil(x.teste.tokens)} tokens. Primeira fala: <i>“${esc(x.teste.diario.slice(0, 220))}”</i>` : `<span class="desce">✗ A chave vale, mas o teste falhou com o modelo ${esc(x.modelo)}: ${esc(x.teste.erro)}</span><br>Escolha outro modelo na lista e teste de novo.`) : ''}</div>
+    </div>`; }).join('')}
+    <button id="novo">🌱 Começar partida nova com estas IAs</button>`;
+}
+async function salvarIA(id) {
+  const chave = document.querySelector(`[data-chave="${id}"]`)?.value || '', modelo = document.querySelector(`[data-modelo="${id}"]`)?.value || '';
+  ias[id] = { ...(ias[id] || {}), ocupado: true, erro: '' }; pintarAba();
+  try {
+    const r = await fetch('/api/arena/chaves', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provedor: id, chave, modelo }) });
+    const d = await r.json();
+    ias[id] = r.ok ? { modelos: d.modelos, modelo: d.modelo, teste: d.teste } : { ...(ias[id] || {}), ocupado: false, erro: d.erro || `erro ${r.status}` };
+    servidor = await fetch('/api/arena/status', { headers: { 'x-senha': senha() } }).then((x) => x.json()).catch(() => servidor);
+  } catch (e) { ias[id] = { ...(ias[id] || {}), ocupado: false, erro: 'o servidor do jogo não respondeu' }; }
+  pintar(false); pintarAba();
+}
+
 function pintarAba() {
   const c = ceoDe(j, vista), el = $('conteudo');
   const rolagem = el.scrollTop;
@@ -234,6 +262,7 @@ function pintarAba() {
   else if (aba === 'macro') el.innerHTML = abaMacro(c);
   else if (aba === 'micro') el.innerHTML = abaMicro(c);
   else if (aba === 'comparar') el.innerHTML = abaComparar();
+  else if (aba === 'ias') el.innerHTML = abaIAs();
   else if (aba === 'cronica') el.innerHTML = j.log.slice(-120).reverse().map((l) => `<div class="anoBloco" style="border-color:${l.de ? CEOS[l.de].cor : '#d9a13a'};margin-bottom:6px"><span class="rot">${dataDe(l.t)}</span> ${esc(l.texto)}</div>`).join('') || '<div class="rot">Nada ainda.</div>';
   else {
     el.innerHTML = abaRegras();
@@ -250,7 +279,7 @@ function pintar(tudo = true) {
   document.querySelectorAll('#abas [data-aba]').forEach((b) => b.classList.toggle('ativo', b.dataset.aba === aba));
   pintarRanking();
   // A aba Micro só é redesenhada quando o usuário pede, para não atrapalhar a leitura.
-  if (tudo && !$('baixo').classList.contains('recolhido') && aba !== 'micro' && aba !== 'regras') { if (aba === 'painel' && $('grafico') && foco === null) atualizarPainel(); else if (aba !== 'painel') pintarAba(); }
+  if (tudo && !$('baixo').classList.contains('recolhido') && aba !== 'micro' && aba !== 'regras' && aba !== 'ias') { if (aba === 'painel' && $('grafico') && foco === null) atualizarPainel(); else if (aba !== 'painel') pintarAba(); }
 }
 
 // No painel, a cada mês só os números e o desenho mudam; a estrutura fica, para não perder a rolagem nem o toque.
@@ -276,6 +305,9 @@ $('conteudo').addEventListener('pointerdown', lerGrafico);
 $('conteudo').addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' || e.buttons) lerGrafico(e); });
 $('conteudo').addEventListener('pointerleave', () => { if (foco !== null && aba === 'painel') { foco = null; desenharPainel(); } });
 $('conteudo').addEventListener('click', (e) => {
+  const sv = e.target.closest('[data-salvar]');
+  if (sv) { salvarIA(sv.dataset.salvar); return; }
+  if (aba === 'ias' && e.target.id === 'novo') { if (confirm('Começar uma partida nova do zero com as IAs configuradas?')) { localStorage.removeItem(CHAVE); window.removeEventListener('pagehide', salvar); location.reload(); } return; }
   const met = e.target.closest('[data-metrica]'), jan = e.target.closest('[data-janela]');
   if (met) { metrica = met.dataset.metrica; foco = null; pintarAba(); return; }
   if (jan) { janela = +jan.dataset.janela; foco = null; pintarAba(); return; }

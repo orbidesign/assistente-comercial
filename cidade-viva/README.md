@@ -20,6 +20,10 @@ ARENA_ENSAIO=1 node server/index.mjs   # respostas simuladas, sem gastar
 
 Com chaves de verdade: `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY` (e, para o mapa do Google, `GOOGLE_MAPS_API_KEY`). Sem chave de alguma IA, aquele CEO joga por regras.
 
+### Jeito mais simples (Mac)
+
+Dê dois cliques em `Abrir o jogo.command`. Ele instala o que falta, prepara e abre o jogo no navegador. Dentro do jogo, na aba **⚙ IAs**, cole a chave de cada IA e toque em **Salvar e testar**: o jogo lista os modelos que a chave enxerga, escolhe um, faz um despacho de verdade do primeiro mês e mostra se funcionou. As chaves ficam no arquivo `.chaves.json`, só neste computador.
+
 ### Como abrir (computador e iPad)
 
 O jogo roda em um computador seu, que faz as chamadas às IAs com as suas chaves. No próprio computador: `http://localhost:8787/ceo.html`. No iPad ou celular, na mesma rede Wi-Fi: `http://IP-DO-COMPUTADOR:8787/ceo.html` (o IP aparece em Ajustes de rede; algo como 192.168.0.12). O computador precisa ficar ligado com o servidor rodando. Para abrir de qualquer lugar, é preciso publicar o servidor em uma hospedagem.

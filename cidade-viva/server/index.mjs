@@ -93,12 +93,21 @@ try { livro = JSON.parse(fs.readFileSync(ARQUIVO_GASTO, 'utf8')); } catch { /* p
 const SENHA = process.env.ARENA_SENHA || '';
 const autorizado = (req) => !SENHA || req.headers?.['x-senha'] === SENHA;
 
+// A tela de chaves só existe no computador de quem joga: nunca na Vercel, nunca para outra máquina da rede.
+const local = (req) => !NA_VERCEL && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress);
+
 async function rotaArena(req, res) {
+  if (req.url === '/api/arena/chaves') {
+    if (!local(req)) return responder(res, 403, { erro: 'as chaves só podem ser configuradas no próprio computador onde o jogo roda' });
+    const { situacaoDasChaves, configurar } = await import('./chaves.mjs');
+    if (req.method !== 'POST') return responder(res, 200, situacaoDasChaves());
+    try { return responder(res, 200, await configurar(await lerCorpo(req))); } catch (e) { return responder(res, 400, { erro: e.message }); }
+  }
   const ceo = req.url === '/api/arena/decidir-ceo';
   if (req.url === '/api/arena/status') {
     return responder(res, 200, {
       // Chave do Google Maps para o navegador (restrinja-a ao seu domínio no console do Google).
-      googleMaps: process.env.GOOGLE_MAPS_API_KEY || '', pedeSenha: !!SENHA, senhaOk: autorizado(req),
+      googleMaps: process.env.GOOGLE_MAPS_API_KEY || '', telaDeChaves: local(req), pedeSenha: !!SENHA, senhaOk: autorizado(req),
       tokens: TOKENS_ARENA, jogo: livro.jogo, ensaio: process.env.ARENA_ENSAIO === '1',
       provedores: Object.fromEntries(Object.entries(PROVEDORES).map(([id, p]) => [id, { ativo: ativo(id), modelo: p.modelo, precos: p.precos, gasto: livro.gasto[id] || 0 }])),
     });
@@ -206,6 +215,7 @@ export async function tratar(req, res) {
 }
 
 // Na Vercel quem recebe os pedidos é api/index.mjs; em um computador, este servidor.
+if (!NA_VERCEL) await import('./chaves.mjs');
 if (!NA_VERCEL) http.createServer(tratar).listen(PORTA, () => {
   console.log(`Cidade Viva: servidor em http://localhost:${PORTA} — IA ${client ? `ativa (${MODELO}, teto de US$ ${LIMITE.toFixed(2)})` : 'desligada (defina ANTHROPIC_API_KEY para ligar)'}`);
 });
